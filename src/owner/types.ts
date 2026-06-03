@@ -10,6 +10,9 @@ export interface OwnerRoomStatus {
   vacatingDate?: string; // ISO, required when kind='vacating'
   rentConfirmed?: number; // required when kind='vacating'
   floorPrice?: number;          // private - owner's minimum acceptable rent
+  actualRent?: number;          // Actual rent (last tenant)
+  expectedRent?: number;        // Expected rent (owner ask)
+  lowestAcceptableRent?: number; // Lowest acceptable rent (private to owner)
   notes?: string;
   updatedAt: string; // ISO
   verifiedToday: boolean;
@@ -61,6 +64,7 @@ export interface OwnerBlockRequest {
   expiresAt: string; // requestedAt + 15 min
   state: OwnerBlockState;
   decidedAt?: string;
+  customId?: string;
 }
 
 export interface ComplianceSnapshot {
@@ -93,6 +97,7 @@ export interface OwnerProfile {
   isDedicated: boolean; // dedicated supply layer (3+ rooms / 20+ beds)
   tier: 'priority' | 'standard' | 'throttled';
   joinedAt: string;
+  email?: string;
 }
 
 export type DailyTruthPhase = 'idle' | 'open' | 'warning' | 'locked';
@@ -102,3 +107,31 @@ export interface DailyTruthState {
   msToNextTransition: number;
   todayKey: string; // YYYY-MM-DD
 }
+
+// Tenant occupying a room
+export interface OwnerTenant {
+  id: string;
+  roomId: string;
+  propertyId: string;
+  ownerId: string;
+  name: string;
+  phone: string;
+  moveInDate: string;   // YYYY-MM-DD
+  noticeDate?: string;  // set when tenant gives notice
+  onNoticePeriod: boolean;
+}
+
+// Message from Gharpayy team to owner (visit alerts, notices, etc.)
+export type OwnerMessageKind = 'visit_scheduled' | 'visit_cancelled' | 'tenant_notice' | 'rent_update' | 'general';
+export interface OwnerMessage {
+  id: string;
+  ownerId: string;
+  propertyId: string;
+  roomId?: string;
+  kind: OwnerMessageKind;
+  title: string;
+  body: string;
+  sentAt: string; // ISO
+  read: boolean;
+}
+

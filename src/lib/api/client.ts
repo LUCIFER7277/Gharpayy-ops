@@ -120,6 +120,7 @@ export interface ManagedUser {
   adminId?: string | null;
   adminIds?: string[];
   memberIds?: string[];
+  isTcm?: boolean;
   createdAt: string;
 }
 
@@ -177,7 +178,7 @@ export const api = {
 
   auth: {
     me: () => request<{ user: AuthUser }>("/api/auth/me"),
-    update: (b: { password?: string; phone?: string; fullName?: string }) =>
+    update: (b: { password?: string; phone?: string; fullName?: string; isTcm?: boolean }) =>
       request<{ ok: true }>("/api/auth/update", { method: "PATCH", body: JSON.stringify(b) }),
   },
 

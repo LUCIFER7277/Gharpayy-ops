@@ -29,8 +29,10 @@ export function OwnerVisits() {
   const todays = useMemo(() => tours.filter((t) => {
     const d = new Date(t.scheduledAt);
     const n = new Date();
-    return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
-  }), [tours]);
+    const isToday = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+    const isMyProp = ownerProps.some((p) => p.id === t.propertyId);
+    return isToday && isMyProp;
+  }), [tours, ownerProps]);
 
   // Effort tally
   const effort = useMemo(() => {

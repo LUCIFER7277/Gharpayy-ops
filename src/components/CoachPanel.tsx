@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { useOwner } from "@/owner/owner-context";
+import { useAuthUser } from "@/lib/auth-store";
 
 interface Props {
   /** When true, panel renders compact (sidebar widget). */
@@ -52,6 +54,36 @@ export function CoachPanel({ compact = false }: Props) {
   // ensure dependency tracking
   void userSlot;
 
+  const authUser = useAuthUser((s) => s.user);
+
+  const loggedInName = useMemo(() => {
+    return authUser?.fullName || authUser?.username || authUser?.email || "";
+  }, [authUser]);
+
+  const { currentOwnerId, roomStatuses, blocks, owners } = useOwner();
+
+  const ownerName = useMemo(() => {
+    if (!currentOwnerId) return "";
+    return owners.find((o) => o.id === currentOwnerId)?.name || "";
+  }, [currentOwnerId, owners]);
+
+  const ownerSignals = useMemo(() => {
+    if (role !== "owner" || !currentOwnerId) {
+      return { staleRooms: 0, pendingBlocks: 0 };
+    }
+    const staleRooms = roomStatuses.filter((r) => {
+      if (r.ownerId !== currentOwnerId) return false;
+      const days = (now - new Date(r.updatedAt).getTime()) / (24 * 36e5);
+      return days >= 7;
+    }).length;
+
+    const pendingBlocks = blocks.filter(
+      (b) => b.ownerId === currentOwnerId && b.state === "pending"
+    ).length;
+
+    return { staleRooms, pendingBlocks };
+  }, [role, currentOwnerId, roomStatuses, blocks, now]);
+
   // Day rollover lives in an effect (no store writes from render).
   useEffect(() => {
     if (mounted) rolloverIfNeeded(who);
@@ -62,9 +94,11 @@ export function CoachPanel({ compact = false }: Props) {
     return buildCoachReport({
       role, currentTcmId, tcms, leads, tours, followUps,
       activities, bookings, handoffs, now,
-      ownerSignals: { staleRooms: 0, pendingBlocks: 0 },
+      ownerSignals,
+      currentOwnerId: currentOwnerId || undefined,
+      currentOwnerName: loggedInName || ownerName || undefined,
     });
-  }, [role, currentTcmId, tcms, leads, tours, followUps, activities, bookings, handoffs, now, mounted]);
+  }, [role, currentTcmId, tcms, leads, tours, followUps, activities, bookings, handoffs, now, mounted, ownerSignals, currentOwnerId, ownerName, loggedInName]);
 
   const badges = computeBadges(stats.xp, stats.streak, stats.bookingsClosed);
 

@@ -1,4 +1,4 @@
-import type { OwnerProfile, OwnerRoomStatus, OwnerRoomMedia, OwnerBlockRequest, OwnerInsightDaily, OwnerObjection } from './types';
+import type { OwnerProfile, OwnerRoomStatus, OwnerRoomMedia, OwnerBlockRequest, OwnerInsightDaily, OwnerObjection, OwnerTenant, OwnerMessage } from './types';
 import { generateRooms } from '@/myt/lib/properties-seed';
 import { todayKey } from './compliance';
 
@@ -100,10 +100,10 @@ export function generateSeedBlocks(roomStatuses: OwnerRoomStatus[]): OwnerBlockR
   ];
 }
 
-// Exported constants for compatibility (will be generated on first access)
-export const seedObjections: OwnerObjection[] = [];
-export const seedMedia: OwnerRoomMedia[] = [];
-export const seedBlocks: OwnerBlockRequest[] = [];
+// Exported constants for compatibility
+export const seedObjections: OwnerObjection[] = generateSeedObjections(seedRoomStatuses);
+export const seedMedia: OwnerRoomMedia[] = generateSeedMedia(seedRoomStatuses);
+export const seedBlocks: OwnerBlockRequest[] = generateSeedBlocks(seedRoomStatuses);
 export const seedInsights: OwnerInsightDaily[] = seedOwners.map((o) => ({
   ownerId: o.id,
   date: todayKey(now),
@@ -113,3 +113,110 @@ export const seedInsights: OwnerInsightDaily[] = seedOwners.map((o) => ({
   topObjection: ['Price ₹1.5k high', 'Wants AC', 'Far from metro', 'Food not preferred'][Math.floor(Math.random() * 4)],
   priceMismatchSignal: Math.random() > 0.6 ? 'Asking ₹2k below median' : undefined,
 }));
+
+// ─── Tenant Seed ───────────────────────────────────────────────────────────
+
+const TENANT_NAMES = [
+  'Arjun Mehta', 'Sneha Rao', 'Vikram Singh', 'Priya Nair',
+  'Rohit Gupta', 'Anjali Sharma', 'Karan Joshi', 'Divya Kumar',
+  'Suresh Babu', 'Nisha Pillai',
+];
+
+export function generateSeedTenants(roomStatuses: OwnerRoomStatus[]): OwnerTenant[] {
+  const occupied = roomStatuses.filter((s) => s.kind === 'occupied' || s.kind === 'vacating');
+  const list = occupied.map((s, i) => ({
+    id: `ten-${i + 1}`,
+    roomId: s.roomId,
+    propertyId: s.propertyId,
+    ownerId: s.ownerId,
+    name: TENANT_NAMES[i % TENANT_NAMES.length],
+    phone: `+9198765${String(43200 + i).padStart(5, '0')}`,
+    moveInDate: new Date(Date.now() - (90 + i * 30) * 86400000).toISOString().split('T')[0],
+    noticeDate: s.kind === 'vacating' ? s.vacatingDate : undefined,
+    onNoticePeriod: s.kind === 'vacating',
+  }));
+
+  // Seed a future tenant for a vacant room to simulate a Logged status
+  const vacantRoom = roomStatuses.find(r => r.kind === 'vacant');
+  if (vacantRoom) {
+    list.push({
+      id: 'ten-logged-seed',
+      roomId: vacantRoom.roomId,
+      propertyId: vacantRoom.propertyId,
+      ownerId: vacantRoom.ownerId,
+      name: 'Aditya Sen',
+      phone: '+919999888877',
+      moveInDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0], // 5 days in future
+      noticeDate: undefined,
+      onNoticePeriod: false,
+    });
+  }
+
+  return list;
+}
+
+export const seedTenants: OwnerTenant[] = generateSeedTenants(seedRoomStatuses);
+
+// ─── Message Seed ──────────────────────────────────────────────────────────
+
+const isoMin = (offsetMin = 0) => new Date(Date.now() + offsetMin * 60_000).toISOString();
+
+export function generateSeedMessages(roomStatuses: OwnerRoomStatus[]): OwnerMessage[] {
+  const occupied = roomStatuses.filter((s) => s.kind === 'occupied');
+  const vacant   = roomStatuses.filter((s) => s.kind === 'vacant');
+  const vacating = roomStatuses.filter((s) => s.kind === 'vacating');
+
+  const messages: OwnerMessage[] = [];
+
+  // Visit scheduled messages
+  vacant.slice(0, 3).forEach((s, i) => {
+    const roomNo = `Room ${100 + parseInt(s.roomId.match(/(\d+)/)?.[0] || String(i + 1), 10)}`;
+    const visitTimes = ['Tomorrow at 11:00 AM', 'Today at 3:30 PM', 'Thursday at 2:00 PM'];
+    messages.push({
+      id: `msg-visit-${i + 1}`,
+      ownerId: s.ownerId,
+      propertyId: s.propertyId,
+      roomId: s.roomId,
+      kind: 'visit_scheduled',
+      title: 'Visit Scheduled',
+      body: `A prospect will visit ${roomNo} at your property ${visitTimes[i]}. Please ensure the room is accessible.`,
+      sentAt: isoMin(-(i + 1) * 60),
+      read: i > 0,
+    });
+  });
+
+  // Tenant notice messages
+  vacating.slice(0, 2).forEach((s, i) => {
+    const roomNo = `Room ${100 + parseInt(s.roomId.match(/(\d+)/)?.[0] || String(i + 1), 10)}`;
+    messages.push({
+      id: `msg-notice-${i + 1}`,
+      ownerId: s.ownerId,
+      propertyId: s.propertyId,
+      roomId: s.roomId,
+      kind: 'tenant_notice',
+      title: 'Tenant on Notice Period',
+      body: `The tenant in ${roomNo} has given notice and will vacate by ${s.vacatingDate || 'end of month'}. We'll start showing the room.`,
+      sentAt: isoMin(-(i + 3) * 120),
+      read: false,
+    });
+  });
+
+  // General messages
+  if (occupied.length > 0) {
+    messages.push({
+      id: 'msg-general-1',
+      ownerId: occupied[0].ownerId,
+      propertyId: occupied[0].propertyId,
+      kind: 'general',
+      title: 'Rent Collection Reminder',
+      body: 'Monthly rent collection is due in 3 days. Please confirm receipt once tenants pay.',
+      sentAt: isoMin(-48 * 60),
+      read: true,
+    });
+  }
+
+  return messages.sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+}
+
+export const seedMessages: OwnerMessage[] = generateSeedMessages(seedRoomStatuses);
+

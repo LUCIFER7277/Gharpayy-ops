@@ -1,462 +1,1070 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useOwner } from '@/owner/owner-context';
 import { Link } from '@tanstack/react-router';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Building2, ShieldCheck, AlertTriangle, Lock, Camera, Inbox, BarChart3, Clock,
-  Trophy, CheckCircle2, Sparkles, Activity, TrendingUp, Wallet, Calendar, XCircle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import type { RoomStatusKind } from '@/owner/types';
+import {
+  Building2, Lock, Inbox, Clock, AlertTriangle,
+  User, Phone, ArrowRight, Bell, BellOff, ChevronRight,
+  XCircle, Users, CalendarCheck, MessageSquare, Sparkles,
+  Trophy, CheckCircle2, BarChart2, Camera, ShieldCheck,
+  ChevronUp, ChevronDown, Activity,
 } from 'lucide-react';
-import { useMountedNow } from '@/hooks/use-now';
-import { format, formatDistanceToNowStrict } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { Countdown } from '@/owner/components/Countdown';
-import { ownerTier, roomHeroClass } from '@/owner/components/room-hero';
-import { OBJECTION_LABELS } from '@/owner/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { CoachInline } from '@/components/CoachInline';
-import { useApp } from '@/lib/store';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+function roomLabel(roomId: string) {
+  const n = parseInt(roomId.match(/(\d+)/)?.[0] || '1', 10);
+  return `Room ${100 + n}`;
+}
+
+function timeAgo(iso: string) {
+  try {
+    return formatDistanceToNowStrict(new Date(iso), { addSuffix: true });
+  } catch {
+    return '';
+  }
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export function OwnerHome() {
   const {
-    currentOwnerId, setCurrentOwnerId,
-    owners, complianceFor, roomStatuses, blocks, insights, truth,
-    properties, rooms, objections, violations, decideBlock,
+    currentOwnerId, setCurrentOwnerId, owners,
+    properties, rooms, roomStatuses, blocks, tenants, messages, insights,
+    updateRoomStatus, updateRoomSharing, decideBlock, markMessageRead, complianceFor, toggleDedicated,
+    addRoom
   } = useOwner();
-  const owner = owners.find((o) => o.id === currentOwnerId) ?? owners[0];
+
+  // inline form edit tracking
+  const [editedRooms, setEditedRooms] = useState<Record<string, {
+    kind: RoomStatusKind;
+    actualRent: string;
+    expectedRent: string;
+    lowestAcceptableRent: string;
+    notes: string;
+    vacatingDate: string;
+  }>>({});
+
+  const owner = currentOwnerId ? (owners.find((o) => o.id === currentOwnerId) ?? null) : null;
+
+  // Show loading state while auth is resolving (currentOwnerId starts as null)
+  if (!owner) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 text-muted-foreground">
+        <div className="h-8 w-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />
+        <p className="text-xs font-mono">Loading your dashboard…</p>
+      </div>
+    );
+  }
+
   const compliance = complianceFor(owner.id);
-  const myStatuses = roomStatuses.filter((r) => r.ownerId === owner.id);
   const myProps = properties.filter((p) => owner.propertyIds.includes(p.id));
+  const myStatuses = roomStatuses.filter((r) => r.ownerId === owner.id);
   const myRooms = rooms.filter((r) => myProps.some((p) => p.id === r.propertyId));
-  const verified = myStatuses.filter((r) => r.verifiedToday).length;
-  const locked = myStatuses.filter((r) => r.lockedUnsellable).length;
-  const dedicated = myStatuses.filter((r) => r.isDedicated).length;
-  const sellable = myStatuses.filter((r) => r.verifiedToday && !r.lockedUnsellable && (r.kind === 'vacant' || r.kind === 'vacating')).length;
-  const pendingBlocks = blocks.filter((b) => b.ownerId === owner.id && b.state === 'pending');
+  const myTenants = tenants.filter((t) => t.ownerId === owner.id);
+  const myMessages = messages.filter((m) => m.ownerId === owner.id);
+  const myPendingBlocks = blocks.filter((b) => b.ownerId === owner.id && b.state === 'pending');
   const insight = insights.find((i) => i.ownerId === owner.id);
-  const myObjections = objections.filter((o) => o.ownerId === owner.id);
-  const [, mounted] = useMountedNow(60_000);
-  const tier = ownerTier(compliance.score);
-  const appLeads = useApp((s) => s.leads);
-  const appTours = useApp((s) => s.tours);
-  const ownerAreaText = myProps.map((p) => `${p.name} ${p.area}`).join(" ").toLowerCase();
-  const matchingLeads = appLeads.filter((l) => ownerAreaText.includes((l.preferredArea || "").toLowerCase()) || ownerAreaText.includes((l.tags?.[0] || "").toLowerCase()));
-  const activeVisits = appTours.filter((t) => myProps.some((p) => p.id === t.propertyId) && t.status === "scheduled");
-  const hotDemand = matchingLeads.filter((l) => l.intent === "hot").length;
-  const ownerActions = [
-    pendingBlocks.length ? `${pendingBlocks.length} block approval${pendingBlocks.length > 1 ? "s" : ""} waiting` : null,
-    locked ? `${locked} locked room${locked > 1 ? "s" : ""} need verification` : null,
-    compliance.mediaFreshRooms < compliance.totalRooms ? `${compliance.totalRooms - compliance.mediaFreshRooms} room photo set${compliance.totalRooms - compliance.mediaFreshRooms > 1 ? "s" : ""} stale` : null,
-    activeVisits.length ? `${activeVisits.length} Tour${activeVisits.length > 1 ? "s" : ""} scheduled by TCM` : null,
-  ].filter(Boolean) as string[];
 
-  // Revenue lens
-  const revenue = useMemo(() => {
-    const occupiedRooms = myStatuses.filter((s) => s.kind === 'occupied');
-    const filledBeds = occupiedRooms.reduce((acc, s) => {
-      const r = myRooms.find((x) => x.id === s.roomId);
-      return acc + (r?.bedsOccupied ?? 0);
-    }, 0);
-    const totalBeds = myRooms.reduce((acc, r) => acc + r.bedsTotal, 0);
-    const validRents = myStatuses.map((s) => s.rentConfirmed).filter((x): x is number => !!x);
-    const avgRent = validRents.length ? Math.round(validRents.reduce((a, b) => a + b, 0) / validRents.length) : 0;
-    const monthly = occupiedRooms.reduce((acc, s) => acc + (s.rentConfirmed ?? 0), 0);
-    const vacant = myStatuses.filter((s) => s.kind === 'vacant').length;
-    return { filledBeds, totalBeds, avgRent, monthly, vacant };
-  }, [myStatuses, myRooms]);
 
-  // Demand bars
-  const demandBars = useMemo(() => {
-    const c: Record<string, number> = {};
-    myObjections.forEach((o) => { c[o.reason] = (c[o.reason] ?? 0) + 1; });
-    return c;
-  }, [myObjections]);
+  // ── Single Property Selection ──
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+  const [selectedRoomId, setSelectedRoomId] = useState<string>('');
+  const activePropertyId = selectedPropertyId || myProps[0]?.id || '';
+  const selectedProp = myProps.find((p) => p.id === activePropertyId) ?? myProps[0];
 
-  // Vacancy forecast
-  const forecast = useMemo(() => {
-    const map: Record<string, typeof myStatuses> = {};
-    myStatuses.forEach((s) => {
-      if (s.vacatingDate) {
-        map[s.vacatingDate] = map[s.vacatingDate] || [];
-        map[s.vacatingDate].push(s);
-      }
+  // Collapsible properties state
+  const [expandedProps, setExpandedProps] = useState<Record<string, boolean>>({});
+  const togglePropertyExpanded = (propertyId: string) => {
+    setExpandedProps((prev) => ({
+      ...prev,
+      [propertyId]: prev[propertyId] === false ? true : false,
+    }));
+  };
+
+  // Add room dialog states
+  const [addRoomFor, setAddRoomFor] = useState<string | null>(null);
+  const [roomForm, setRoomForm] = useState({
+    type: 'double' as 'single' | 'double' | 'triple' | 'studio',
+    bedsTotal: '2',
+    price: '',
+    floorPrice: '',
+    actualRent: '',
+  });
+
+  const submitAddRoom = () => {
+    if (!addRoomFor || !roomForm.price) {
+      toast.error('Property and price required');
+      return;
+    }
+    addRoom({
+      propertyId: addRoomFor,
+      type: roomForm.type,
+      bedsTotal: Number(roomForm.bedsTotal) || 1,
+      price: Number(roomForm.price),
+      floorPrice: roomForm.floorPrice ? Number(roomForm.floorPrice) : undefined,
+      actualRent: roomForm.actualRent ? Number(roomForm.actualRent) : undefined,
+      expectedRent: Number(roomForm.price),
+      lowestAcceptableRent: roomForm.floorPrice ? Number(roomForm.floorPrice) : undefined,
     });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
-  }, [myStatuses]);
+    toast.success(`Room added`, { description: 'Now visible to your sales team.' });
+    setRoomForm({ type: 'double', bedsTotal: '2', price: '', floorPrice: '', actualRent: '' });
+    setAddRoomFor(null);
+  };
 
-  const phaseColor = truth.phase === 'locked' ? 'bg-destructive/10 text-destructive border-destructive/30'
-    : truth.phase === 'warning' ? 'bg-warning/15 text-warning-foreground border-warning/30'
-    : truth.phase === 'open' ? 'bg-info/10 text-info border-info/30'
-    : 'bg-muted text-muted-foreground border-border';
+  useEffect(() => {
+    setSelectedRoomId('');
+    setExpandedProps({});
+  }, [currentOwnerId]);
+
+  // ── Filtered data based on active property ──
+  const propStatuses = myStatuses.filter((s) => s.propertyId === activePropertyId);
+  const propRooms = myRooms.filter((r) => r.propertyId === activePropertyId);
+  const propTenants = myTenants.filter((t) => t.propertyId === activePropertyId);
+  const propMessages = myMessages.filter((m) => m.propertyId === activePropertyId);
+  const propPendingBlocks = myPendingBlocks.filter((b) => b.propertyId === activePropertyId);
+
+  // ── Stats Computations ──
+  const totalRoomsCount = propStatuses.length;
+  const sellableRoomsCount = propStatuses.filter((s) => !s.lockedUnsellable).length;
+  const vacantSellableCount = propStatuses.filter((s) => !s.lockedUnsellable && s.kind === 'vacant').length;
+  const vacancyPct = totalRoomsCount > 0 ? Math.round((vacantSellableCount / totalRoomsCount) * 100) : 0;
+
+  const dedicatedCount = propStatuses.filter((s) => s.isDedicated).length;
+  const selfManagedCount = totalRoomsCount - dedicatedCount;
+
+  const lockedCount = propStatuses.filter((s) => s.lockedUnsellable).length;
+  const pendingCount = propPendingBlocks.length;
+
+  // ── Dropdown What Gharpayy did stats ──
+  const [statsOpen, setStatsOpen] = useState(false);
+  const propAllBlocks = useMemo(() => {
+    return blocks.filter((b) => b.ownerId === owner.id && b.propertyId === activePropertyId);
+  }, [blocks, owner.id, activePropertyId]);
+
+  const leadsPitchedCount = insight?.leadsPitched ?? 0;
+  const visitsScheduledCount = useMemo(() => {
+    return Math.max(
+      propMessages.filter((m) => m.kind === 'visit_scheduled').length,
+      insight?.visitsDone ? insight.visitsDone + 1 : 0
+    );
+  }, [propMessages, insight]);
+  const visitsCompletedCount = insight?.visitsDone ?? 0;
+  const toursOutreachCount = leadsPitchedCount + visitsScheduledCount + visitsCompletedCount;
+
+  const blocksRequestedCount = propAllBlocks.length;
+  const blocksApprovedCount = useMemo(() => {
+    return propAllBlocks.filter((b) => b.state === 'approved').length;
+  }, [propAllBlocks]);
+  const blocksRejectedCount = useMemo(() => {
+    return propAllBlocks.filter((b) => b.state === 'rejected').length;
+  }, [propAllBlocks]);
+
+  const lastActivityLabel = useMemo(() => {
+    const times: number[] = [];
+    propAllBlocks.forEach((b) => times.push(new Date(b.requestedAt).getTime()));
+    propMessages.forEach((m) => times.push(new Date(m.sentAt).getTime()));
+    if (times.length === 0) return '—';
+    const maxTime = Math.max(...times);
+    return timeAgo(new Date(maxTime).toISOString());
+  }, [propAllBlocks, propMessages]);
+
+  // ── Unified Enriched Rooms for All Properties of the Owner ──
+  const allRoomsEnriched = useMemo(() => {
+    const enriched = myStatuses.map((s) => {
+      const room = myRooms.find((r) => r.id === s.roomId);
+      const pendingBlock = myPendingBlocks.find((b) => b.roomId === s.roomId);
+      const upcomingTenant = myTenants.find((t) => t.roomId === s.roomId && new Date(t.moveInDate).getTime() > Date.now());
+
+      let virtualKind: 'occupied' | 'vacating' | 'vacant' | 'blocked' | 'logged' | 'pending' = s.kind;
+      if (pendingBlock) {
+        virtualKind = 'pending';
+      } else if (upcomingTenant) {
+        virtualKind = 'logged';
+      }
+
+      const activeTenant = myTenants.find((t) => t.roomId === s.roomId && (!t.moveInDate || new Date(t.moveInDate).getTime() <= Date.now()));
+
+      return {
+        roomId: s.roomId,
+        propertyId: s.propertyId,
+        roomNo: roomLabel(s.roomId),
+        kind: s.kind,
+        virtualKind,
+        isDedicated: !!s.isDedicated,
+        bedsTotal: room?.bedsTotal ?? 1,
+        bedsOccupied: room?.bedsOccupied ?? 0,
+        type: room?.type ?? 'single',
+        tenant: activeTenant ?? null,
+        upcomingTenant: upcomingTenant ?? null,
+        pendingBlock: pendingBlock ?? null,
+        rentConfirmed: s.rentConfirmed,
+        expectedRent: s.expectedRent,
+        actualRent: s.actualRent,
+        floorPrice: s.floorPrice,
+        lowestAcceptableRent: s.lowestAcceptableRent,
+        vacatingDate: s.vacatingDate,
+        notes: s.notes,
+        lockedUnsellable: s.lockedUnsellable,
+      };
+    });
+
+    return enriched;
+  }, [myStatuses, myRooms, myTenants, myPendingBlocks]);
+
+  const markReady = (roomId: string) => {
+    updateRoomStatus(roomId, { kind: 'vacant' });
+    toast.success('Room marked as vacant (ready to sell)');
+  };
+
+  const todayLabel = format(new Date(), 'EEE, MMM d');
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* OWNER SWITCHER - compact identity control */}
-      <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1 opacity-80">
-        {owners.map((o) => {
-          const active = o.id === owner.id;
-          return (
-            <button
-              key={o.id}
-              onClick={() => setCurrentOwnerId(o.id)}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap transition-colors",
-                active
-                  ? "border-warning/50 bg-warning/10 text-warning-foreground"
-                  : "border-border bg-card hover:bg-muted text-muted-foreground",
-              )}
-            >
-              <span className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                o.tier === "priority" ? "bg-success" : o.tier === "throttled" ? "bg-destructive" : "bg-info",
-              )} />
-              {o.name}
-            </button>
-          );
-        })}
+    <div className="space-y-5 pb-12">
+      {/* ══════════════════════════════════════════════════════════════════════
+          1. HEADER (Dropdown selector & Wisely Displayed Property Name)
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border/40">
+        <div>
+          <div className="text-[10px] font-bold text-orange-500 uppercase tracking-widest flex items-center gap-1.5">
+            <Sparkles className="h-3 w-3 shrink-0" /> Host Control Room
+          </div>
+          <h2 className="font-display text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2 mt-1">
+            <Building2 className="h-5 w-5 text-orange-500 shrink-0" />
+            {selectedProp ? selectedProp.name : 'Your inventory'}
+          </h2>
+          <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
+            {selectedProp ? `${selectedProp.area} · ${selectedProp.genderCategory || 'Co-live'}` : 'Verify supply to maximize occupancy.'}
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          {/* Active Property Dropdown Switcher */}
+          {myProps.length > 1 && (
+            <div className="flex flex-col space-y-1">
+              <Label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Active Property</Label>
+              <Select value={activePropertyId} onValueChange={setSelectedPropertyId}>
+                <SelectTrigger className="w-full sm:w-56 h-9 bg-background text-xs">
+                  <SelectValue placeholder="Select Property" />
+                </SelectTrigger>
+                <SelectContent>
+                  {myProps.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      🏢 {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Active Owner Profile & Tier Info Display */}
+          <div className="flex flex-col space-y-1">
+            <Label className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Owner Profile & Tier</Label>
+            <div className="flex items-center gap-2 px-3 h-9 rounded-md border border-border bg-muted/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
+              👤 {owner.name} ({owner.tier === 'priority' ? 'Gold' : owner.tier === 'standard' ? 'Silver' : 'Bronze'} Tier)
+            </div>
+          </div>
+        </div>
       </div>
 
-      <CoachInline page="owner" />
-
-      {/* HERO */}
-      <header className="flex items-end justify-between flex-wrap gap-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Welcome back, {owner.name.split(' ')[0]}</div>
-          <h1 className="font-display text-2xl md:text-3xl font-semibold tracking-tight">
-            Your inventory, your control.
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Fill your beds without losing control.
-            {pendingBlocks.length > 0 && (
-              <span className="text-warning-foreground font-medium"> · {pendingBlocks.length} request{pendingBlocks.length > 1 ? 's' : ''} need your call.</span>
-            )}
-          </p>
-        </div>
-        <div className={`text-[11px] font-mono inline-flex items-center gap-2 rounded-md border px-2 py-1 ${phaseColor}`}>
-          <Clock className="h-3 w-3" />
-          {truth.phase === 'idle' && 'Update window opens 9:30 AM'}
-          {truth.phase === 'open' && 'OPEN - update all rooms'}
-          {truth.phase === 'warning' && 'WARNING - auto-lock at 11 AM'}
-          {truth.phase === 'locked' && 'LOCKED - unverified rooms removed from supply'}
-          {mounted && truth.msToNextTransition > 0 && truth.phase !== 'locked' && (
-            <span>· {formatDistanceToNowStrict(new Date(Date.now() + truth.msToNextTransition))}</span>
-          )}
-        </div>
-      </header>
-
-      {/* TRUST TIER + COMPLIANCE - premium band */}
-      <section className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className={cn(
-          'h-2 w-full',
-          tier.tone === 'success' && 'bg-gradient-to-r from-emerald-400 to-teal-500',
-          tier.tone === 'warning' && 'bg-gradient-to-r from-amber-400 to-orange-500',
-          tier.tone === 'muted' && 'bg-muted',
-        )} />
-        <div className="p-5 flex flex-wrap items-center gap-6">
-          <div className="flex items-center gap-4">
-            <div className={cn(
-              'h-14 w-14 rounded-2xl grid place-items-center text-white shadow-sm',
-              tier.tone === 'success' && 'bg-gradient-to-br from-emerald-400 to-teal-500',
-              tier.tone === 'warning' && 'bg-gradient-to-br from-amber-400 to-orange-500',
-              tier.tone === 'muted' && 'bg-muted text-muted-foreground',
-            )}>
-              <Trophy className="h-6 w-6" />
+      {/* ══════════════════════════════════════════════════════════════════════
+          2. COMPLIANCE & TRUST BAR
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="rounded-2xl border border-border bg-gradient-to-r from-card to-muted/20 p-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-center">
+          <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+            <div className="h-10 w-10 rounded-xl bg-orange-500/10 grid place-items-center shrink-0">
+              <ShieldCheck className="h-5.5 w-5.5 text-orange-500" />
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Priority tier</div>
-              <div className="text-2xl font-display font-semibold">{tier.tier}</div>
-              <div className="text-[11px] text-muted-foreground">Higher tier = more leads routed to you</div>
+              <div className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground">Compliance Score</div>
+              <div className="text-lg font-bold text-slate-800 dark:text-slate-100">{compliance.score}/100</div>
             </div>
           </div>
-          <div className="hidden sm:block h-12 w-px bg-border" />
-          <div className="flex-1 min-w-[220px]">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Trust score · today</div>
-              <div className="text-lg font-bold tabular-nums">{compliance.score}/100</div>
-            </div>
-            <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+
+          <div className="flex-1 w-full space-y-1.5">
+            <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
-                className={cn('h-full transition-all',
-                  compliance.score >= 80 ? 'bg-success' : compliance.score >= 50 ? 'bg-warning' : 'bg-destructive')}
-                style={{ width: `${compliance.score}%` }}
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${compliance.score}%`,
+                  background: 'linear-gradient(90deg, #F59E0B, #EF4444)'
+                }}
               />
             </div>
-            <div className="text-[11px] text-muted-foreground mt-2">
-              {dedicated} dedicated · {compliance.totalRooms} total rooms · {compliance.mediaFreshRooms} fresh media
+            <div className="flex justify-between items-center text-[10px] text-muted-foreground font-mono">
+              <span>Goal: Keep above 90 to secure Priority Leads Routing</span>
+              <span>{compliance.mediaFreshRooms} / {totalRoomsCount} rooms verified</span>
             </div>
           </div>
-          {violations > 0 && (
-            <div className="inline-flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <div className="text-xs font-mono font-semibold">{violations} violation{violations > 1 ? 's' : ''}</div>
-            </div>
-          )}
         </div>
-      </section>
-
-      {/* OPERATING ALIGNMENT - Flow Ops + TCM signal */}
-      <section className="rounded-xl border border-border bg-card p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Flow Ops + TCM need from you</div>
-            <h2 className="font-display text-lg font-semibold">Keep sellable supply clean.</h2>
-          </div>
-          <div className="flex gap-2 text-[10px] flex-wrap">
-            <span className="rounded-full bg-success/10 text-success px-2 py-1">{hotDemand} hot leads nearby</span>
-            <span className="rounded-full bg-info/10 text-info px-2 py-1">{activeVisits.length} scheduled Tours</span>
-          </div>
-        </div>
-        <div className="grid gap-2 md:grid-cols-2">
-          {(ownerActions.length ? ownerActions : ['No blockers. Your rooms are usable by the team.']).map((a, i) => (
-            <div key={i} className="rounded-lg border border-border bg-background/50 px-3 py-2 text-sm flex items-center gap-2">
-              <Activity className="h-4 w-4 text-accent" />
-              <span>{a}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* QUICK STATS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard icon={CheckCircle2} label="Sellable" value={sellable} sub="Live to team" tone="success" />
-        <StatCard icon={Sparkles} label="Dedicated" value={dedicated} sub="Auto-bookable" tone="info" />
-        <StatCard icon={Lock} label="Locked" value={locked} sub="Need confirm" tone="danger" />
-        <StatCard icon={Clock} label="Pending" value={pendingBlocks.length} sub="Owner approvals" tone="warning" />
       </div>
 
-      {/* PENDING BLOCKS - top priority, inline */}
-      {pendingBlocks.length > 0 && (
-        <section className="space-y-3">
-          <SectionHeader icon={Inbox} title="Pending block requests" subtitle="Approve or reject - auto-released after 15 min" tone="warning" />
+      {/* ══════════════════════════════════════════════════════════════════════
+          3. 4 STAT CARDS (Restructured: vacancy percentage, dedicated division)
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
+          icon={<CheckCircle2 className="h-4.5 w-4.5 text-emerald-500" />}
+          label="Sellable Capacity"
+          value={`${sellableRoomsCount} / ${totalRoomsCount} Rooms`}
+          sub={`${vacancyPct}% vacant inventory left`}
+          accent="emerald"
+        />
+        <StatCard
+          icon={<Users className="h-4.5 w-4.5 text-blue-500" />}
+          label="Supply Division"
+          value={`${dedicatedCount} Dedicated`}
+          sub={`${selfManagedCount} Self-Managed`}
+          accent="blue"
+        />
+        <StatCard
+          icon={<Lock className="h-4.5 w-4.5 text-destructive" />}
+          label="Locked Rooms"
+          value={lockedCount}
+          sub={lockedCount > 0 ? 'Unverified by 11 AM' : 'All rooms sellable'}
+          accent={lockedCount > 0 ? 'red' : 'none'}
+        />
+        <StatCard
+          icon={<Inbox className="h-4.5 w-4.5 text-amber-500" />}
+          label="Pending Approvals"
+          value={pendingCount}
+          sub="Block / visit holds"
+          accent={pendingCount > 0 ? 'amber' : 'none'}
+        />
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          4. ACTION TILES
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <ActionTile
+          to="/owner/rooms"
+          icon={<Building2 className="h-5 w-5" />}
+          title="Manage Rooms Registry"
+          sub={lockedCount > 0 ? `${lockedCount} locked — fix now` : 'All rooms verified'}
+          urgent={lockedCount > 0}
+        />
+        <ActionTile
+          to="/owner/blocks"
+          icon={<Inbox className="h-5 w-5" />}
+          title="Visit Block Holds"
+          sub={pendingCount > 0 ? `${pendingCount} approvals pending` : 'All holds resolved'}
+          success={pendingCount === 0}
+        />
+        <ActionTile
+          to="/owner/insights"
+          icon={<Camera className="h-5 w-5" />}
+          title="Tours Activity Log"
+          sub="Realtime client visit feed"
+        />
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          Dropdown Accordion: What Gharpayy did for you
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <button
+          onClick={() => setStatsOpen(!statsOpen)}
+          className="w-full flex items-center justify-between p-4 hover:bg-muted/10 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2.5">
+            <Activity className="h-4.5 w-4.5 text-orange-500 shrink-0" />
+            <span className="font-semibold text-sm text-slate-900 dark:text-slate-100">What Gharpayy did for you</span>
+            <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 dark:bg-slate-800/80 px-2 py-0.5 rounded">live · last 200 events</span>
+          </div>
+          <div className="text-muted-foreground font-semibold text-xs flex items-center gap-1">
+            {statsOpen ? 'Hide Activity' : 'Show Activity'}
+            {statsOpen ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </div>
+        </button>
+
+        {statsOpen && (
+          <div className="p-4 border-t border-border bg-muted/5 grid grid-cols-2 sm:grid-cols-4 gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="bg-background rounded-xl border border-border/60 p-3 space-y-1.5 shadow-sm">
+              <div className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider font-mono">Leads Pitched</div>
+              <div className="text-lg font-semibold font-mono text-slate-800 dark:text-slate-100">{leadsPitchedCount}</div>
+            </div>
+            <div className="bg-background rounded-xl border border-border/60 p-3 space-y-1.5 shadow-sm">
+              <div className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider font-mono">Visits Scheduled</div>
+              <div className="text-lg font-semibold font-mono text-slate-800 dark:text-slate-100">{visitsScheduledCount}</div>
+            </div>
+            <div className="bg-background rounded-xl border border-border/60 p-3 space-y-1.5 shadow-sm">
+              <div className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider font-mono">Visits Completed</div>
+              <div className="text-lg font-semibold font-mono text-slate-800 dark:text-slate-100">{visitsCompletedCount}</div>
+            </div>
+            <div className="bg-background rounded-xl border border-border/60 p-3 space-y-1.5 shadow-sm">
+              <div className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider font-mono">Tours / Outreach</div>
+              <div className="text-lg font-semibold font-mono text-slate-800 dark:text-slate-100">{toursOutreachCount}</div>
+            </div>
+            <div className="bg-background rounded-xl border border-border/60 p-3 space-y-1.5 shadow-sm">
+              <div className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider font-mono">Blocks Requested</div>
+              <div className="text-lg font-semibold font-mono text-slate-800 dark:text-slate-100">{blocksRequestedCount}</div>
+            </div>
+            <div className="bg-background rounded-xl border border-border/60 p-3 space-y-1.5 shadow-sm">
+              <div className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider font-mono">Blocks Approved</div>
+              <div className="text-lg font-semibold font-mono text-emerald-600 dark:text-emerald-400">{blocksApprovedCount}</div>
+            </div>
+            <div className="bg-background rounded-xl border border-border/60 p-3 space-y-1.5 shadow-sm">
+              <div className="text-[9px] text-muted-foreground uppercase font-medium tracking-wider font-mono">Blocks Rejected</div>
+              <div className="text-lg font-semibold font-mono text-slate-800 dark:text-slate-100">{blocksRejectedCount}</div>
+            </div>
+            <div className="bg-background rounded-xl border border-border/60 p-3 space-y-1.5 shadow-sm">
+              <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider font-mono">Last Activity</div>
+              <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate mt-1">
+                {lastActivityLabel}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          5. DEMAND PULSE (Simplified summary)
+      ══════════════════════════════════════════════════════════════════════ */}
+      {insight && (
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between text-xs border-b border-border/40 pb-2">
+            <span className="font-semibold text-slate-800 dark:text-slate-200">Demand Summary · {todayLabel}</span>
+            <Link to="/owner/insights" className="text-[10px] text-orange-500 hover:underline">
+              Detailed breakdown →
+            </Link>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="bg-muted/30 rounded-xl p-2.5">
+              <div className="text-base font-bold font-mono text-slate-800 dark:text-slate-100">{insight.leadsPitched}</div>
+              <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Leads Pitched</div>
+            </div>
+            <div className="bg-muted/30 rounded-xl p-2.5">
+              <div className="text-base font-bold font-mono text-slate-800 dark:text-slate-100">{insight.visitsDone}</div>
+              <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Visits Completed</div>
+            </div>
+            <div className="bg-muted/30 rounded-xl p-2.5 text-left flex flex-col justify-center">
+              <div className="text-xs font-semibold text-rose-500 truncate" title={insight.topObjection}>
+                {insight.topObjection ?? 'None'}
+              </div>
+              <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Top Objection</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          6. GHARPAYY INBOX & VISITOR ALERTS
+      ══════════════════════════════════════════════════════════════════════ */}
+      {propPendingBlocks.length > 0 && (
+        <section className="space-y-2">
+          <SectionTitle
+            icon={<Inbox className="h-4 w-4" />}
+            title="Pending Supply Holds"
+            badge={propPendingBlocks.length}
+            badgeColor="amber"
+          />
           <div className="space-y-2">
-            {pendingBlocks.map((req) => {
-              const room = myRooms.find((r) => r.id === req.roomId);
-              const prop = properties.find((p) => p.id === req.propertyId);
-              const heroId = room?.id ?? req.roomId;
-              return (
-                <div key={req.id} className="rounded-xl border border-warning/30 bg-card p-3 flex flex-wrap items-center gap-3">
-                  <div className={cn('h-12 w-12 rounded-xl grid place-items-center text-white font-mono font-bold text-xs shadow-sm', roomHeroClass(heroId))}>
-                    {(prop?.name ?? 'R').slice(0, 2).toUpperCase()}
+            {propPendingBlocks.map((req) => (
+              <div key={req.id} className="rounded-xl border border-amber-400/30 bg-amber-500/5 p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex items-start gap-2.5 flex-1">
+                  <div className="h-8 w-8 rounded-lg bg-amber-500/10 grid place-items-center shrink-0">
+                    <Bell className="h-3.5 w-3.5 text-amber-600" />
                   </div>
-                  <div className="flex-1 min-w-[180px]">
-                    <div className="text-sm font-semibold">{req.leadName} <span className="text-muted-foreground font-normal">· intent {req.intent}</span></div>
-                    <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                      {prop?.name ?? 'Room'} · {room?.type ?? 'room'} ({room?.bedsTotal ?? '-'} beds)
-                    </div>
-                    <div className="text-[11px] mt-1 inline-flex items-center gap-1.5">
-                      <Clock className="h-3 w-3 text-warning-foreground" />
-                      Auto-expires in <Countdown to={req.expiresAt} />
+                  <div>
+                    <div className="font-bold text-xs">Hold request for Room {roomLabel(req.roomId)}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      Lead: {req.leadName} · Requested {timeAgo(req.requestedAt)}
                     </div>
                   </div>
-                  <div className="flex gap-2 w-full sm:w-auto">
-                    <Button size="sm" variant="outline" className="flex-1 sm:flex-initial" onClick={() => {
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-destructive/20 bg-destructive/5 text-destructive hover:bg-destructive/10"
+                    onClick={() => {
                       decideBlock(req.id, 'rejected');
-                      toast.error('Block rejected', { description: `${req.leadName} released.` });
-                    }}>
-                      <XCircle className="h-4 w-4 mr-1" /> Reject
-                    </Button>
-                    <Button size="sm" className="flex-1 sm:flex-initial" onClick={() => {
+                      toast.error('Block rejected');
+                    }}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs bg-emerald-500 hover:bg-emerald-600 text-white"
+                    onClick={() => {
                       decideBlock(req.id, 'approved');
-                      toast.success('Block approved', { description: `Locked for ${req.leadName}.` });
-                    }}>
-                      <CheckCircle2 className="h-4 w-4 mr-1" /> Approve
-                    </Button>
+                      toast.success('Block approved');
+                    }}
+                  >
+                    Approve Hold
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          7. ROOMS REGISTRY DIRECTORY
+      ══════════════════════════════════════════════════════════════════════ */}
+      <section className="space-y-3">
+        <SectionTitle
+          icon={<Building2 className="h-4 w-4" />}
+          title="Rooms Registry Directory"
+          badge={allRoomsEnriched.length}
+          right="Direct inline edit & sync"
+        />
+
+        {myProps.length === 0 ? (
+          <EmptyState icon={<Building2 className="h-10 w-10 text-muted-foreground" />} message="No properties found for this owner." />
+        ) : (
+          <div className="space-y-4">
+            {myProps.map((p) => {
+              const propertyRooms = allRoomsEnriched.filter((r) => r.propertyId === p.id);
+              const isExpanded = expandedProps[p.id] !== false; // default to true
+              
+              const totalRooms = propertyRooms.length;
+              const vacantRooms = propertyRooms.filter((r) => r.kind === 'vacant').length;
+
+              return (
+                <div key={p.id} className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                  {/* Property Header Banner */}
+                  <div
+                    onClick={() => togglePropertyExpanded(p.id)}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-muted/5 transition-colors cursor-pointer border-b border-border/40"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-orange-500/10 grid place-items-center shrink-0">
+                        <Building2 className="h-5.5 w-5.5 text-orange-500" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                          {p.name} · {p.area}
+                        </h3>
+                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                          {p.id} · hub:pg · {totalRooms} rooms · {vacantRooms}/{totalRooms} vacant
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-[11px] font-semibold flex items-center gap-1 border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+                        onClick={() => {
+                          const vacantRoomIds = propertyRooms
+                            .filter((r) => r.kind === 'vacant' && !r.isDedicated)
+                            .map((r) => r.roomId);
+                          if (vacantRoomIds.length === 0) {
+                            toast.info('No vacant self-managed rooms to hold.');
+                            return;
+                          }
+                          vacantRoomIds.forEach((id) => toggleDedicated(id));
+                          toast.success(`Held all ${vacantRoomIds.length} vacant rooms for Gharpayy!`);
+                        }}
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Hold all vacant
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-8 text-[11px] font-semibold bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:hover:bg-slate-200 dark:text-slate-950 flex items-center gap-1"
+                        onClick={() => {
+                          setAddRoomFor(p.id);
+                        }}
+                      >
+                        <span className="text-base font-normal leading-none">+</span> Add rooms
+                      </Button>
+
+                      {/* Collapse/Expand chevron indicator */}
+                      <button
+                        onClick={() => togglePropertyExpanded(p.id)}
+                        className="p-1 hover:bg-muted/50 rounded-lg transition-colors ml-1"
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="h-4.5 w-4.5 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4.5 w-4.5 text-muted-foreground" />
+                        )}
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Property Rooms Grid */}
+                  {isExpanded && (
+                    <div className="p-4 bg-muted/5">
+                      {propertyRooms.length === 0 ? (
+                        <EmptyState icon={<Building2 className="h-8 w-8 text-muted-foreground" />} message="No rooms matching this property." />
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {propertyRooms.map((room) => {
+                            const formVal = editedRooms[room.roomId] || {
+                              kind: room.kind,
+                              actualRent: room.actualRent?.toString() || '',
+                              expectedRent: (room.expectedRent ?? room.rentConfirmed)?.toString() || '',
+                              lowestAcceptableRent: (room.lowestAcceptableRent ?? room.floorPrice)?.toString() || '',
+                              notes: room.notes || '',
+                              vacatingDate: room.vacatingDate || '',
+                            };
+
+                            const setFormVal = (key: keyof typeof formVal, val: string) => {
+                              setEditedRooms((prev) => ({
+                                ...prev,
+                                [room.roomId]: {
+                                  ...formVal,
+                                  [key]: val,
+                                },
+                              }));
+                            };
+
+                            // Determine config using the selected form kind
+                            const config = STATUS_CONFIG[formVal.kind as keyof typeof STATUS_CONFIG] || STATUS_CONFIG[room.virtualKind];
+
+                            return (
+                              <div
+                                key={room.roomId}
+                                className={cn(
+                                  "rounded-xl border bg-card p-2 space-y-1.5 flex flex-col hover:shadow-md transition-all duration-200 overflow-hidden",
+                                  room.lockedUnsellable ? "border-destructive/30 bg-destructive/2" : "border-border"
+                                )}
+                              >
+                                {/* Card Header: Room Labels, Dedicated Toggle, Badges */}
+                                <div className="flex items-start justify-between gap-1.5">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-semibold text-[13px] text-slate-900 dark:text-slate-100">{room.roomNo}</div>
+                                    <div className="flex flex-col gap-0.5 mt-0.5">
+                                      <span className="text-[9px] font-mono text-muted-foreground bg-muted dark:bg-slate-800/80 px-1 py-0.5 rounded whitespace-nowrap w-fit">
+                                        {room.roomId}
+                                      </span>
+                                      {/* Dedicated supply tag */}
+                                      <div className="flex items-center">
+                                        <span
+                                          className={cn(
+                                            "text-[8px] font-semibold border rounded py-0.5 w-[76px] text-center inline-block shrink-0",
+                                            room.isDedicated
+                                              ? "bg-orange-500/10 text-orange-600 border-orange-400/20"
+                                              : "bg-slate-100 text-slate-500 border-slate-200/50"
+                                          )}
+                                        >
+                                          {room.isDedicated ? "Dedicated" : "Self-Managed"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-col gap-1 items-end shrink-0">
+                                    {/* Inline Status Dropdown Select */}
+                                    <Select
+                                      value={formVal.kind}
+                                      onValueChange={(val) => setFormVal('kind', val as RoomStatusKind)}
+                                    >
+                                      <SelectTrigger className={cn("h-6 text-[9.5px] font-semibold px-2 py-0.5 border w-[108px] bg-background transition-colors", config.bg)}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="occupied">🔵 Occupied</SelectItem>
+                                        <SelectItem value="vacating">🟡 On Notice</SelectItem>
+                                        <SelectItem value="vacant">🟢 Ready to Sell</SelectItem>
+                                        <SelectItem value="blocked">🔴 Blocked</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+
+                                    {/* Inline Sharing Dropdown Select */}
+                                    <Select
+                                      value={String(room.bedsTotal)}
+                                      onValueChange={(val) => {
+                                        const beds = Number(val);
+                                        const typeMap: Record<number, 'single' | 'double' | 'triple' | 'studio'> = {
+                                          1: 'single',
+                                          2: 'double',
+                                          3: 'triple',
+                                          4: 'studio',
+                                        };
+                                        updateRoomSharing(room.roomId, beds, typeMap[beds]);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-6 text-[9.5px] font-semibold px-2 py-0.5 border w-[108px] bg-background">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="1">🙋‍♂️ Single</SelectItem>
+                                        <SelectItem value="2">👥 Double</SelectItem>
+                                        <SelectItem value="3">👥 Triple</SelectItem>
+                                        <SelectItem value="4">👥 Four</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+
+                                {/* Middle Row: Details and Pricing side-by-side */}
+                                <div className="grid grid-cols-12 gap-1.5 items-stretch flex-1">
+                                  {/* Left Column: Virtual States and Details Panel */}
+                                  <div className="col-span-6 text-[10.5px] space-y-1 bg-muted/20 dark:bg-slate-900/30 rounded-lg p-1.5 flex flex-col justify-center min-h-[72px]">
+                                    {/* Vacating inline inputs */}
+                                    {formVal.kind === 'vacating' && (
+                                      <div className="space-y-0.5">
+                                        <div className="font-semibold text-orange-500 flex items-center gap-1 text-[9.5px]">
+                                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                                          <span>Notice Given</span>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                          <Label className="text-[8px] uppercase tracking-widest text-muted-foreground font-mono">Vacating Date *</Label>
+                                          <Input
+                                            type="date"
+                                            className="h-5.5 text-[10px] px-1.5 py-0.5 bg-background w-full max-w-[130px]"
+                                            value={formVal.vacatingDate}
+                                            onChange={(e) => setFormVal('vacatingDate', e.target.value)}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Blocked inline inputs */}
+                                    {formVal.kind === 'blocked' && (
+                                      <div className="space-y-0.5">
+                                        <div className="text-slate-600 dark:text-slate-400 font-semibold flex items-center gap-1 text-[9.5px]">
+                                          <Lock className="h-3 w-3 shrink-0" />
+                                          <span>Blocked Hold</span>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                          <Label className="text-[8px] uppercase tracking-widest text-muted-foreground font-mono">Reason</Label>
+                                          <Input
+                                            placeholder="Reason..."
+                                            className="h-5.5 text-[10px] px-1.5 py-0.5 bg-background"
+                                            value={formVal.notes}
+                                            onChange={(e) => setFormVal('notes', e.target.value)}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Normal view for Occupied */}
+                                    {formVal.kind === 'occupied' && (
+                                      room.tenant ? (
+                                        <div className="space-y-0.5">
+                                          <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate">
+                                            <User className="h-3 w-3 text-blue-500 shrink-0" />
+                                            <span>{room.tenant.name}</span>
+                                          </div>
+                                          <div className="text-muted-foreground flex items-center gap-1 text-[9.5px]">
+                                            <Phone className="h-2.5 w-2.5" /> {room.tenant.phone}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-0.5">
+                                          <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                                            <User className="h-3 w-3 text-blue-500 shrink-0" />
+                                            <span>Occupied Lease</span>
+                                          </div>
+                                          <div className="text-muted-foreground text-[9.5px]">
+                                            Details pending sync
+                                          </div>
+                                        </div>
+                                      )
+                                    )}
+
+                                    {/* Normal view for Vacant */}
+                                    {formVal.kind === 'vacant' && !room.upcomingTenant && !room.pendingBlock && (
+                                      <div className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1 text-[9.5px]">
+                                        <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                        <span>Ready to sell</span>
+                                      </div>
+                                    )}
+
+                                    {/* Upcoming move-in */}
+                                    {room.upcomingTenant && formVal.kind === 'vacant' && (
+                                      <div className="space-y-0.5">
+                                        <div className="font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1 text-[9.5px]">
+                                          <CalendarCheck className="h-3 w-3 shrink-0" />
+                                          <span>Logged Move-in</span>
+                                        </div>
+                                        <div className="text-[9.5px] text-slate-700 dark:text-slate-300 font-medium truncate">
+                                          👤 {room.upcomingTenant.name}
+                                        </div>
+                                        <div className="text-muted-foreground text-[8px] font-mono">
+                                          {format(new Date(room.upcomingTenant.moveInDate), 'dd MMM yyyy')}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Pending Block Request hold */}
+                                    {room.pendingBlock && formVal.kind === 'vacant' && (
+                                      <div className="space-y-1">
+                                        <div className="font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1 text-[9.5px]">
+                                          <Clock className="h-3 w-3 shrink-0" />
+                                          <span>Visit Hold Pending</span>
+                                        </div>
+                                        <div className="text-[9px] text-slate-600 dark:text-slate-400 truncate">
+                                          For: <strong>{room.pendingBlock.leadName}</strong>
+                                        </div>
+                                        <div className="flex items-center gap-1 pt-0.5">
+                                          <Button size="sm" variant="outline" className="h-5 text-[8.5px] px-1.5 text-destructive border-destructive/20 bg-destructive/2 hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); decideBlock(room.pendingBlock!.id, 'rejected'); toast.error('Rejected request'); }}>
+                                            Reject
+                                          </Button>
+                                          <Button size="sm" className="h-5 text-[8.5px] px-1.5 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={(e) => { e.stopPropagation(); decideBlock(room.pendingBlock!.id, 'approved'); toast.success('Approved lock'); }}>
+                                            Approve
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Right Column: Pricing Matrix (Writable Inputs stacked) */}
+                                  <div className="col-span-6 flex flex-col justify-center gap-1 bg-slate-50 dark:bg-slate-900/60 rounded-lg p-1.5">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-muted-foreground font-medium text-[8px] uppercase tracking-wider">Actual</span>
+                                      <Input
+                                        type="number"
+                                        className="h-[21px] w-[72px] text-right font-mono font-semibold text-[10px] bg-background p-1"
+                                        value={formVal.actualRent}
+                                        onChange={(e) => setFormVal('actualRent', e.target.value)}
+                                        placeholder="—"
+                                      />
+                                    </div>
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-orange-500 font-medium text-[8px] uppercase tracking-wider">Expected</span>
+                                      <Input
+                                        type="number"
+                                        className="h-[21px] w-[72px] text-right font-mono font-semibold text-[10px] text-orange-500 bg-background p-1 border-orange-200"
+                                        value={formVal.expectedRent}
+                                        onChange={(e) => setFormVal('expectedRent', e.target.value)}
+                                        placeholder="—"
+                                      />
+                                    </div>
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-slate-500 flex items-center gap-0.5 text-[8px] uppercase tracking-wider">
+                                        <Lock className="h-2 w-2" /> Min
+                                      </span>
+                                      <Input
+                                        type="number"
+                                        className="h-[21px] w-[72px] text-right font-mono font-semibold text-[10px] text-slate-500 bg-background p-1"
+                                        value={formVal.lowestAcceptableRent}
+                                        onChange={(e) => setFormVal('lowestAcceptableRent', e.target.value)}
+                                        placeholder="—"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Action Row */}
+                                <div className="flex items-center gap-1 pb-0.5 border-t border-border/30 mt-auto pt-1">
+                                  {/* Secondary Context actions */}
+                                  {formVal.kind === 'vacating' && (
+                                    <Button size="sm" className="h-6 text-[9.5px] px-1.5 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => { setFormVal('kind', 'vacant'); toast.info('Changed status kind to vacant'); }}>
+                                      Mark Ready
+                                    </Button>
+                                  )}
+                                  {formVal.kind === 'blocked' && (
+                                    <Button size="sm" variant="outline" className="h-6 text-[9.5px] px-1.5" onClick={() => { setFormVal('kind', 'vacant'); toast.info('Changed status kind to vacant'); }}>
+                                      Unblock
+                                    </Button>
+                                  )}
+
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className={cn(
+                                      "h-6 text-[9.5px] w-[105px] justify-center flex items-center gap-1 shrink-0",
+                                      room.isDedicated
+                                        ? "border-orange-500/30 text-orange-600 bg-orange-500/5 hover:bg-orange-500/10 dark:text-orange-400"
+                                        : "border-border text-muted-foreground hover:text-foreground"
+                                    )}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleDedicated(room.roomId);
+                                      toast.success(room.isDedicated ? 'Removed from dedicated supply' : 'Room is now dedicated to Gharpayy for selling!');
+                                    }}
+                                    disabled={formVal.kind === 'occupied'}
+                                  >
+                                    <ShieldCheck className="h-3 w-3 shrink-0" />
+                                    <span>{room.isDedicated ? 'Release hold' : 'Hold for Gharpayy'}</span>
+                                  </Button>
+
+                                  <Button
+                                    size="sm"
+                                    className="h-6 text-[10px] px-2.5 bg-slate-900 hover:bg-slate-800 text-white ml-auto flex items-center gap-1"
+                                    onClick={() => {
+                                      if (formVal.kind === 'vacating' && (!formVal.vacatingDate || !formVal.expectedRent)) {
+                                        toast.error('Vacating status requires date & expected rent');
+                                        return;
+                                      }
+                                      updateRoomStatus(room.roomId, {
+                                        kind: formVal.kind,
+                                        actualRent: formVal.actualRent ? Number(formVal.actualRent) : undefined,
+                                        expectedRent: formVal.expectedRent ? Number(formVal.expectedRent) : undefined,
+                                        rentConfirmed: formVal.expectedRent ? Number(formVal.expectedRent) : undefined,
+                                        lowestAcceptableRent: formVal.lowestAcceptableRent ? Number(formVal.lowestAcceptableRent) : undefined,
+                                        floorPrice: formVal.lowestAcceptableRent ? Number(formVal.lowestAcceptableRent) : undefined,
+                                        vacatingDate: formVal.kind === 'vacating' ? formVal.vacatingDate : undefined,
+                                        notes: formVal.notes || undefined,
+                                      });
+                                      toast.success('Room changes saved & synced!');
+                                    }}
+                                  >
+                                    Save
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
-        </section>
-      )}
-
-      {/* TODAY CHECKLIST */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <ChecklistTile to="/owner/rooms" icon={Building2} label="Update rooms"
-          subtitle={truth.phase === 'locked' ? `${locked} locked - fix now` : `${myStatuses.length - verified} pending`}
-          accent={truth.phase === 'locked' ? 'destructive' : verified === myStatuses.length ? 'success' : 'warning'}
-        />
-        <ChecklistTile to="/owner/blocks" icon={Inbox} label="Block requests"
-          subtitle={pendingBlocks.length ? `${pendingBlocks.length} need response` : 'Inbox zero'}
-          accent={pendingBlocks.length ? 'warning' : 'success'}
-        />
-        <ChecklistTile to="/owner/visits" icon={Camera} label="Visits today"
-          subtitle="Live tour activity"
-          accent="default"
-        />
-      </div>
-
-      {/* REVENUE LENS */}
-      <section className="space-y-3">
-        <SectionHeader icon={Wallet} title="Revenue lens" subtitle="Cash flow at a glance" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <RevTile label="Filled beds" value={`${revenue.filledBeds}/${revenue.totalBeds}`} />
-          <RevTile label="Avg rent" value={`₹${revenue.avgRent.toLocaleString()}`} />
-          <RevTile label="Vacant rooms" value={revenue.vacant} tone="warning" />
-          <RevTile label="Monthly revenue" value={`₹${revenue.monthly.toLocaleString()}`} tone="success" />
-        </div>
+        )}
       </section>
 
-      {/* OWNER ACTION QUEUE */}
-      <section className="space-y-3">
-        <SectionHeader icon={Activity} title="Owner action queue" subtitle="Specific actions that unblock Flow Ops and TCM" />
-        <div className="grid md:grid-cols-3 gap-3">
-          <ChecklistTile to="/owner/blocks" icon={Inbox} label="Approve / reject holds" subtitle={pendingBlocks.length ? `${pendingBlocks.length} waiting now` : 'No pending holds'} accent={pendingBlocks.length ? 'warning' : 'success'} />
-          <ChecklistTile to="/owner/rooms" icon={Building2} label="Verify room truth" subtitle={locked ? `${locked} locked` : `${sellable} sellable`} accent={locked ? 'destructive' : 'success'} />
-          <ChecklistTile to="/owner/visits" icon={Camera} label="Review TCM activity" subtitle={`${activeVisits.length} upcoming visits`} accent="default" />
-        </div>
-      </section>
-
-      {/* INSIGHT SUMMARY */}
-      {insight && (
-        <section className="rounded-xl border border-border bg-card p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-            <h2 className="font-display text-sm font-semibold">Demand summary · {format(new Date(), 'EEE, MMM d')}</h2>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Mini label="Leads pitched" value={insight.leadsPitched} />
-            <Mini label="Visits done" value={insight.visitsDone} />
-            <Mini label="High intent" value={insight.highIntent} />
-            <Mini label="Top objection" value={insight.topObjection ?? '-'} small />
-          </div>
-          {insight.priceMismatchSignal && (
-            <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs flex items-center gap-2">
-              <AlertTriangle className="h-3.5 w-3.5 text-warning-foreground" />
-              <span className="font-medium">Price signal:</span> {insight.priceMismatchSignal}
-            </div>
-          )}
-          <Link to="/owner/insights" className="text-xs text-accent inline-flex items-center gap-1">View deep insights →</Link>
-        </section>
-      )}
-
-      {/* DEMAND SIGNALS - objection bars */}
-      {Object.keys(demandBars).length > 0 && (
-        <section className="space-y-3">
-          <SectionHeader icon={TrendingUp} title="Demand signals" subtitle="Why deals don't close" />
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            {Object.entries(demandBars).sort(([, a], [, b]) => b - a).map(([reason, count]) => (
-              <div key={reason} className="flex items-center gap-3">
-                <div className="text-sm w-32 font-medium">{OBJECTION_LABELS[reason as keyof typeof OBJECTION_LABELS]}</div>
-                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={cn('h-full', reason === 'price' ? 'bg-destructive' : 'bg-warning')}
-                    style={{ width: `${(count / myObjections.length) * 100}%` }}
-                  />
-                </div>
-                <div className="text-xs font-mono text-muted-foreground w-14 text-right">{count}×</div>
+      {/* ADD ROOM DIALOG */}
+      <Dialog open={!!addRoomFor} onOpenChange={(o) => !o && setAddRoomFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add room</DialogTitle>
+            <DialogDescription>{properties.find((p) => p.id === addRoomFor)?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label>Room type</Label>
+                <Select value={roomForm.type} onValueChange={(v) => setRoomForm((f) => ({ ...f, type: v as any }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Single</SelectItem>
+                    <SelectItem value="double">Double</SelectItem>
+                    <SelectItem value="triple">Triple</SelectItem>
+                    <SelectItem value="studio">Studio</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* VACANCY FORECAST */}
-      {forecast.length > 0 && (
-        <section className="space-y-3">
-          <SectionHeader icon={Calendar} title="Vacancy forecast" subtitle="Plan ahead" />
-          <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
-            {forecast.map(([date, items]) => (
-              <div key={date} className="flex items-center gap-4 p-3">
-                <div className="font-mono text-sm font-semibold w-24">{date}</div>
-                <div className="text-xs text-muted-foreground flex-1 truncate">
-                  {items.map((s) => {
-                    const r = myRooms.find((x) => x.id === s.roomId);
-                    const p = properties.find((x) => x.id === s.propertyId);
-                    return `${p?.name ?? '-'} ${r?.type ?? ''}`;
-                  }).join(' · ')}
-                </div>
-                <div className="text-[10px] font-mono text-warning-foreground bg-warning/10 border border-warning/30 px-2 py-0.5 rounded-full">
-                  {items.length} room{items.length > 1 ? 's' : ''}
-                </div>
+              <div className="space-y-1.5">
+                <Label>Beds total</Label>
+                <Input type="number" value={roomForm.bedsTotal} onChange={(e) => setRoomForm((f) => ({ ...f, bedsTotal: e.target.value }))} />
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* LOCKED BANNER */}
-      {locked > 0 && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 flex items-start gap-3">
-          <Lock className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <div className="font-semibold text-destructive text-sm">{locked} room{locked > 1 ? 's' : ''} auto-locked</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Not verified before 11 AM. Removed from sellable inventory. Update them now to bring them back online.
             </div>
-            <Link to="/owner/rooms" className="inline-block mt-2 text-xs text-destructive font-medium">Open rooms →</Link>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1.5">
+                <Label>Actual Rent ₹</Label>
+                <Input type="number" value={roomForm.actualRent} onChange={(e) => setRoomForm((f) => ({ ...f, actualRent: e.target.value }))} placeholder="Last tenant" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Expected Rent ₹</Label>
+                <Input type="number" value={roomForm.price} onChange={(e) => setRoomForm((f) => ({ ...f, price: e.target.value }))} placeholder="Owner ask" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Lowest Acceptable ₹</Label>
+                <Input type="number" value={roomForm.floorPrice} onChange={(e) => setRoomForm((f) => ({ ...f, floorPrice: e.target.value }))} placeholder="Private" />
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddRoomFor(null)}>Cancel</Button>
+            <Button onClick={submitAddRoom}>Add room</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// ───── primitives ─────
-function SectionHeader({ icon: Icon, title, subtitle, tone }: { icon: any; title: string; subtitle?: string; tone?: 'warning' }) {
-  return (
-    <div className="flex items-end justify-between gap-2">
-      <div className="flex items-center gap-2">
-        <Icon className={cn('h-4 w-4', tone === 'warning' ? 'text-warning-foreground' : 'text-muted-foreground')} />
-        <h2 className="font-display text-sm font-semibold">{title}</h2>
-      </div>
-      {subtitle && <div className="text-[11px] text-muted-foreground">{subtitle}</div>}
-    </div>
-  );
-}
+// ── Primitives ────────────────────────────────────────────────────────────────
+const STATUS_CONFIG = {
+  occupied: { label: 'Occupied', bg: 'bg-blue-50/80 text-blue-700 border-blue-200/60 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/30' },
+  vacating: { label: 'On Notice', bg: 'bg-amber-50/80 text-amber-700 border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/30' },
+  vacant: { label: 'Ready to Sell', bg: 'bg-emerald-50/80 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/30' },
+  blocked: { label: 'Blocked', bg: 'bg-slate-50/80 text-slate-700 border-slate-200/60 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800/30' },
+  logged: { label: 'Logged / Booked', bg: 'bg-purple-50/80 text-purple-700 border-purple-200/60 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900/30' },
+  pending: { label: 'Pending Approval', bg: 'bg-rose-50/80 text-rose-700 border-rose-200/60 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/30 animate-pulse' },
+};
 
-function StatCard({ icon: Icon, label, value, sub, tone }: { icon: any; label: string; value: number | string; sub: string; tone: 'success' | 'info' | 'warning' | 'danger' }) {
-  const t = {
-    success: 'border-success/30 text-success',
-    info: 'border-info/30 text-info',
-    warning: 'border-warning/30 text-warning-foreground',
-    danger: 'border-destructive/30 text-destructive',
-  }[tone];
-  return (
-    <div className={cn('rounded-xl border bg-card p-3', t.split(' ')[0])}>
-      <div className="flex items-center gap-1.5">
-        <Icon className={cn('h-3.5 w-3.5', t.split(' ')[1])} />
-        <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">{label}</span>
-      </div>
-      <div className="text-2xl font-display font-semibold tabular-nums mt-1">{value}</div>
-      <div className="text-[10px] text-muted-foreground">{sub}</div>
-    </div>
-  );
-}
-
-function RevTile({ label, value, tone }: { label: string; value: string | number; tone?: 'success' | 'warning' }) {
-  const c = tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning-foreground' : 'text-foreground';
-  return (
-    <div className="rounded-xl border border-border bg-card p-3">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">{label}</div>
-      <div className={cn('text-xl font-display font-semibold tabular-nums mt-1', c)}>{value}</div>
-    </div>
-  );
-}
-
-function Mini({ label, value, small }: { label: string; value: string | number; small?: boolean }) {
-  return (
-    <div className="rounded-md bg-muted/40 px-3 py-2">
-      <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={small ? 'text-xs font-medium' : 'text-lg font-semibold'}>{value}</div>
-    </div>
-  );
-}
-
-function ChecklistTile({ to, icon: Icon, label, subtitle, accent }: {
-  to: string; icon: any; label: string; subtitle: string; accent: 'default' | 'warning' | 'destructive' | 'success';
+function StatCard({ icon, label, value, sub, accent }: {
+  icon: React.ReactNode; label: string; value: string | number; sub: string;
+  accent: 'emerald' | 'blue' | 'amber' | 'red' | 'none';
 }) {
-  const border = {
-    default: 'border-border',
-    warning: 'border-warning/40',
-    destructive: 'border-destructive/40',
-    success: 'border-success/40',
+  const borderCls = {
+    emerald: 'border-emerald-200 dark:border-emerald-800',
+    blue: 'border-blue-200 dark:border-blue-800',
+    amber: 'border-amber-200 dark:border-amber-800',
+    red: 'border-destructive/30',
+    none: 'border-border',
   }[accent];
   return (
-    <Link to={to} className={cn('block rounded-xl border bg-card p-3 hover:border-accent/50 transition-colors', border)}>
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">{label}</span>
+    <div className={cn('rounded-xl border bg-card p-3.5 space-y-1.5', borderCls)}>
+      <div className="flex items-center gap-1.5">
+        {icon}
+        <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground">{label}</span>
       </div>
-      <div className="text-xs text-muted-foreground mt-1">{subtitle}</div>
+      <div className="text-[15px] sm:text-base font-bold text-slate-800 dark:text-slate-200">{value}</div>
+      <div className="text-[10px] text-muted-foreground font-medium leading-tight">{sub}</div>
+    </div>
+  );
+}
+
+function ActionTile({ to, icon, title, sub, urgent, success }: {
+  to: string; icon: React.ReactNode; title: string; sub: string;
+  urgent?: boolean; success?: boolean;
+}) {
+  const borderCls = urgent ? 'border-destructive/30 hover:border-destructive/60'
+    : success ? 'border-emerald-200 dark:border-emerald-800'
+      : 'border-border hover:border-border/80';
+  return (
+    <Link to={to} className={cn('block rounded-xl border bg-card p-3 hover:shadow-md transition-all active:scale-[0.98]', borderCls)}>
+      <div className="flex items-center gap-2.5">
+        <span className={cn(urgent ? 'text-destructive' : success ? 'text-emerald-500' : 'text-muted-foreground')}>
+          {icon}
+        </span>
+        <div>
+          <div className="font-semibold text-xs">{title}</div>
+          <div className={cn('text-[10px] mt-0.5 font-medium', urgent ? 'text-destructive' : success ? 'text-emerald-600' : 'text-muted-foreground')}>
+            {sub}
+          </div>
+        </div>
+      </div>
     </Link>
+  );
+}
+
+function SectionTitle({ icon, title, badge, badgeColor = 'blue', right }: {
+  icon: React.ReactNode; title: string; badge?: number;
+  badgeColor?: 'blue' | 'amber'; right?: string;
+}) {
+  const badgeCls = badgeColor === 'amber'
+    ? 'bg-amber-500/10 text-amber-600 border-amber-400/30'
+    : 'bg-blue-500/10 text-blue-600 border-blue-400/30';
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground">{icon}</span>
+        <h2 className="font-semibold text-xs uppercase tracking-wider text-slate-800 dark:text-slate-200">{title}</h2>
+        {badge !== undefined && (
+          <span className={cn('rounded-full border px-2 py-0.5 text-[9px] font-semibold font-mono', badgeCls)}>{badge}</span>
+        )}
+      </div>
+      {right && <span className="text-[10px] text-muted-foreground">{right}</span>}
+    </div>
+  );
+}
+
+function EmptyState({ icon, message }: { icon: React.ReactNode; message: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-8 flex flex-col items-center gap-2 text-muted-foreground text-center">
+      <span className="opacity-25">{icon}</span>
+      <p className="text-xs">{message}</p>
+    </div>
   );
 }

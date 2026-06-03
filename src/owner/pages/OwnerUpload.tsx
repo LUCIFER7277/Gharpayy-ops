@@ -61,7 +61,7 @@ export function OwnerUpload() {
   const pgAmenitiesOptions = [
     "High-speed WiFi", "Air Conditioning", "Fitness Center / Gym", 
     "Laundry Service", "Biometric Security", "Rooftop Lounge", 
-    "Home Food (3 Meals)", "Two-wheeler Parking"
+    "Home Food (3 Meals)", "Two-wheeler Parking", "Daily housekeeping"
   ];
   
   const flatAmenitiesOptions = [
@@ -96,6 +96,7 @@ export function OwnerUpload() {
     "Attached Balcony": Sunset,
     "Geyser / Water Heater": Flame,
     "Power Backup": Zap,
+    "Daily housekeeping": Sparkles,
   };
 
   // Helper to handle Multi-Image uploads & Base64 conversions
@@ -136,20 +137,20 @@ export function OwnerUpload() {
     toast.success("Demo details prefilled successfully!");
     
     if (propertyType === "pg") {
-      setName("Premium Nest PG");
-      setArea("Koramangala 4th Block");
-      setAddress("No. 456, 80 Feet Road, Koramangala, Bengaluru, Karnataka 560034");
-      setDescription("A premium co-living facility designed for young professionals and students. Offers high comfort, regular cleaning, healthy home-style meals, and a vibrant rooftop workspace community.");
+      setName("Tranquil Nest Koramangala");
+      setArea("Koramangala");
+      setAddress("12th Main, Koramangala 4th Block, Bengaluru, Karnataka 560034");
+      setDescription("Premium co-living facility designed for young professionals. High comfort, regular cleaning, healthy home-style meals, and a vibrant community.");
       setPgSubtype("Co-living Space");
       setGenderCategory("Co-live (Mixed / Any)");
       setSharingTypes(["Single Sharing", "Double Sharing"]);
-      setRentBasePrice("12500");
-      setPrivateFloorPrice("11000");
-      setFoodRating(5);
-      setHygieneRating(5);
-      setPgAmenities(["High-speed WiFi", "Air Conditioning", "Fitness Center / Gym", "Rooftop Lounge", "Home Food (3 Meals)"]);
-      setGateRules("No curfews. Night entry logged via Biometric register.");
-      setSecurityInfo("24/7 security guard, CCTV surveillance, and biometric main gates.");
+      setRentBasePrice("15000");
+      setPrivateFloorPrice("13500");
+      setFoodRating(4);
+      setHygieneRating(4);
+      setPgAmenities(["High-speed WiFi", "Air Conditioning", "Laundry Service", "Daily housekeeping"]);
+      setGateRules("Gate curfew at 11:30 PM");
+      setSecurityInfo("24/7 guard, biometric gate");
       setPhotos([
         "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80",
         "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=800&q=80"

@@ -120,7 +120,7 @@ export function DirectLeadForm({ onCreated }: Props) {
       ? activeTcms.map((a: any) => ({ id: a.id, name: a.fullName ?? a.name, role: a.role ?? 'tcm' }))
       : orgMembers.filter((m) => m.role === 'member' || m.role === 'tcm').map((m) => ({ id: m.id, name: m.fullName ?? m.name, role: m.role }));
     if (authUser && !base.some((b: any) => b.id === authUser.id)) {
-      base.unshift({ id: authUser.id, name: authUser.fullName ?? authUser.name, role: authUser.role ?? 'member' });
+      base.unshift({ id: authUser.id, name: authUser.fullName ?? authUser.username, role: authUser.role ?? 'member' });
     }
     return base.slice().sort((a, b) => a.name.localeCompare(b.name));
   }, [orgMembers, activeTcms, authUser]);

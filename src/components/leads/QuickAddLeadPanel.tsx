@@ -87,7 +87,7 @@ export function QuickAddLeadPanel({ open, onClose }: Props) {
       : orgMembers.filter((m) => m.role === 'member' || m.role === 'tcm').map((m) => ({ id: m.id, name: m.fullName ?? m.name, role: m.role, zones: (m as any).zones ?? [] }));
     // Ensure current user appears in the assignee list so they can assign to themselves
     if (authUser && !base.find((b: any) => b.id === authUser.id)) {
-      base.unshift({ id: authUser.id, name: authUser.fullName ?? authUser.name, role: authUser.role ?? 'member', zones: (authUser as any).zones ?? [] });
+      base.unshift({ id: authUser.id, name: authUser.fullName ?? authUser.username, role: authUser.role ?? 'member', zones: (authUser as any).zones ?? [] });
     }
     return base.slice().sort((a, b) => a.name.localeCompare(b.name));
   }, [orgMembers, activeTcms, authUser]);
@@ -310,7 +310,7 @@ export function QuickAddLeadPanel({ open, onClose }: Props) {
         stage,
         zoneCategory: zoneBucket,
         assigneeId: assignee?.id ?? null,
-        assigneeName: assignee?.name ?? null,
+        assigneeName: (assignee as any)?.name ?? (assignee as any)?.fullName ?? null,
       },
     );
 

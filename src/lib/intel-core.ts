@@ -39,7 +39,7 @@ export function scoreLead(lead: Lead, activities: Activity[] = [], todos: Todo[]
 
   // Stage progression
   const stageBoost: Record<Lead["stage"], number> = {
-    "new": 0, "contacted": 4, "tour-scheduled": 12, "tour-done": 18,
+    "new": 0, "contacted": 4, "tour-scheduled": 12, "on-tour": 15, "tour-done": 18,
     "negotiation": 24, "booked": 40, "dropped": -30,
   };
   const sb = stageBoost[lead.stage] ?? 0;

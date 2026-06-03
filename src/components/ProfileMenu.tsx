@@ -57,7 +57,7 @@ export function ProfileMenu() {
   const meta = ROLE_META[role];
   const tcm = role === "tcm" ? availableTcns.find((t) => t.id === currentTcmId) : null;
   const authUser = useAuthUser((s) => s.user);
-  const personName = tcm?.name ?? authUser?.fullName ?? authUser?.username ?? authUser?.email ?? "Account";
+  const personName = (tcm as any)?.fullName ?? (tcm as any)?.name ?? authUser?.fullName ?? authUser?.username ?? authUser?.email ?? "Account";
   const computeInitials = (n: string) =>
     n
       .split(/[\s@._-]+/)
@@ -65,7 +65,7 @@ export function ProfileMenu() {
       .slice(0, 2)
       .map((p) => p[0]?.toUpperCase() ?? "")
       .join("") || "U";
-  const initials = tcm?.initials ?? computeInitials(personName);
+  const initials = (tcm as any)?.initials ?? computeInitials(personName);
 
   const roleDisplay = authUser?.role 
     ? authUser.role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')

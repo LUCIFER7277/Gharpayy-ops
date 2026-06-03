@@ -4,24 +4,25 @@ import type { ImpactEnrichedPick } from "./impact-hard-actions";
 import type { Lead } from "@/lib/types";
 
 function lead(partial: Partial<Lead> & Pick<Lead, "id" | "name">): Lead {
+  const { id, name, ...rest } = partial;
   return {
-    id: partial.id,
-    name: partial.name,
-    phone: partial.phone ?? "9999999999",
+    id,
+    name,
+    phone: "9999999999",
     source: "manual",
     budget: 12000,
     moveInDate: "2026-06-01",
     preferredArea: "Koramangala",
     assignedTcmId: "tcm-1",
-    stage: partial.stage ?? "new",
-    intent: partial.intent ?? "warm",
+    stage: "new",
+    intent: "warm",
     confidence: 50,
     tags: [],
     nextFollowUpAt: null,
     responseSpeedMins: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    ...partial,
+    ...rest,
   } as Lead;
 }
 

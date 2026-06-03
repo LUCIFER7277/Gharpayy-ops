@@ -81,7 +81,7 @@ export function LeadPasteParser({ onDone }: Props) {
       ? activeTcms.map((a: any) => ({ id: a.id, name: a.fullName ?? a.name, role: a.role ?? 'tcm', zones: a.zones ?? [] }))
       : orgMembers.filter((m) => m.role === 'member' || m.role === 'tcm').map((m) => ({ id: m.id, name: m.fullName ?? m.name, role: m.role, zones: (m as any).zones ?? [] }));
     if (authUser && !base.find((b: any) => b.id === authUser.id)) {
-      base.unshift({ id: authUser.id, name: authUser.fullName ?? authUser.name, role: authUser.role ?? 'member', zones: (authUser as any).zones ?? [] });
+      base.unshift({ id: authUser.id, name: authUser.fullName ?? authUser.username, role: authUser.role ?? 'member', zones: (authUser as any).zones ?? [] });
     }
     return base.slice().sort((a, b) => a.name.localeCompare(b.name));
   }, [orgMembers, activeTcms, authUser]);
@@ -270,7 +270,7 @@ export function LeadPasteParser({ onDone }: Props) {
         stage,
         zoneCategory: zoneBucket,
         assigneeId: assignee?.id ?? null,
-        assigneeName: assignee?.name ?? null,
+        assigneeName: (assignee as any)?.name ?? (assignee as any)?.fullName ?? null,
       },
     );
 

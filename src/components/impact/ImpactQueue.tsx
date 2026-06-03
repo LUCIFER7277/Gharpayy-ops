@@ -252,7 +252,7 @@ export function ImpactQueue() {
   const selfScopeId = authUser?.id || currentTcmId;
   const { tcms: activeTcms } = useActiveTcMs();
   const { members: orgMembers } = useOrgMembers();
-  const tcmOptions = activeTcms.length > 0 ? activeTcms : tcms;
+  const tcmOptions: any[] = activeTcms.length > 0 ? activeTcms : tcms;
   const memberScopeOptions = useMemo(() => {
     const normalize = (zones?: string[]) =>
       (zones ?? []).map((z) => String(z).trim().toLowerCase()).filter(Boolean);
@@ -444,11 +444,11 @@ export function ImpactQueue() {
       const { score } = scoreLead(lead, openTour, lastQuote);
       const tourBand =
         column === "scheduled" || column === "onTour"
-          ? classifyTourBand(column, openTour, lead, nba, at)
+          ? classifyTourBand(column as "scheduled" | "onTour", openTour, lead, nba, at)
           : undefined;
       const tourTimeHint =
         openTour && (column === "scheduled" || column === "onTour")
-          ? buildTourTimeHint(openTour.scheduledAt, at) ?? undefined
+          ? buildTourTimeHint(openTour, at) ?? undefined
           : undefined;
       return { lead, openTour, lastQuote, nba, score, column, tourBand, tourTimeHint };
     });
@@ -492,15 +492,15 @@ export function ImpactQueue() {
   );
 
   const boardBuckets = useMemo(() => {
-    const b: Record<ColumnKey, Enriched[]> = {
+    const b: Record<ColumnKey, EnrichedLite[]> = {
       inbox: [], scheduled: [], onTour: [], quoted: [], booked: [],
     };
     filtered.forEach((e) => b[e.column].push(e));
     const at = Date.now();
     (["scheduled", "onTour"] as ColumnKey[]).forEach((key) => {
       b[key].sort((a, bb) => {
-        const bandA = a.tourBand ?? classifyTourBand(key, a.openTour, a.lead, a.nba, at);
-        const bandB = bb.tourBand ?? classifyTourBand(key, bb.openTour, bb.lead, bb.nba, at);
+        const bandA = a.tourBand ?? classifyTourBand(key as "scheduled" | "onTour", a.openTour, a.lead, a.nba, at);
+        const bandB = bb.tourBand ?? classifyTourBand(key as "scheduled" | "onTour", bb.openTour, bb.lead, bb.nba, at);
         const orderA = TOUR_BAND_ORDER.indexOf(bandA);
         const orderB = TOUR_BAND_ORDER.indexOf(bandB);
         if (orderA !== orderB) return orderA - orderB;
@@ -1089,7 +1089,7 @@ function BoardColumnBody({
   onRequestStageMove,
 }: {
   columnKey: ColumnKey;
-  items: Enriched[];
+  items: EnrichedLite[];
   tcms: TCM[];
   tcmOptions: TCM[];
   properties: Property[];
@@ -1102,7 +1102,7 @@ function BoardColumnBody({
   const useBands = columnKey === "scheduled" || columnKey === "onTour";
 
   const grouped = useMemo(() => {
-    const map: Record<TourQueueBand, Enriched[]> = {
+    const map: Record<TourQueueBand, EnrichedLite[]> = {
       fire: [], confirm: [], soon: [], later: [],
     };
     if (!useBands) return map;

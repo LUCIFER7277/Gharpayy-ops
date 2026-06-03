@@ -248,25 +248,36 @@ export const PERSONA_BY_ID: Record<string, Persona> =
 /** Find the active persona for a (role, id) pair. Falls back to a synthetic one.
  *  Strict on role match - passing a tcm id while role==='hr' falls back to first hr persona.
  */
-export function activePersona(role: Role, id: string | undefined): Persona {
-  if (id && PERSONA_BY_ID[id] && PERSONA_BY_ID[id].role === role) return PERSONA_BY_ID[id];
-  const first = PERSONAS.find((p) => p.role === role);
-  if (first) return first;
-  return {
-    id: id ?? role,
-    name: role,
-    role,
-    focus: "Generalist",
-    coachTone: "warm-mentor",
-    strengths: [],
-    weakSpots: [],
-    motivators: [],
-    channels: ["in-app"],
-    signature: "What's next?",
-    ritual: "-",
-    arc: "-",
-    missionCap: 6,
-  };
+export function activePersona(role: Role, id: string | undefined, customName?: string): Persona {
+  let p: Persona;
+  if (id && PERSONA_BY_ID[id] && PERSONA_BY_ID[id].role === role) {
+    p = { ...PERSONA_BY_ID[id] };
+  } else {
+    const first = PERSONAS.find((x) => x.role === role);
+    if (first) {
+      p = { ...first };
+    } else {
+      p = {
+        id: id ?? role,
+        name: role,
+        role,
+        focus: "Generalist",
+        coachTone: "warm-mentor",
+        strengths: [],
+        weakSpots: [],
+        motivators: [],
+        channels: ["in-app"],
+        signature: "What's next?",
+        ritual: "-",
+        arc: "-",
+        missionCap: 6,
+      };
+    }
+  }
+  if (customName) {
+    p.name = customName;
+  }
+  return p;
 }
 
 /* ============================================================== */

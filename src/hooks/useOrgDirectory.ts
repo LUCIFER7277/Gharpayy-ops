@@ -2,10 +2,12 @@
 // backend isn't reachable (local mode).
 import { useEffect, useState } from "react";
 import { api, type ManagedUser, type Zone } from "@/lib/api/client";
+import { useAuthUser } from "@/lib/auth-store";
 
 export interface DirectoryMember {
   id: string;
   name: string;
+  fullName?: string;
   role: string;
   zones: string[];
   isTcm?: boolean;
@@ -17,8 +19,17 @@ export function useOrgMembers() {
   const [members, setMembers] = useState<DirectoryMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const authUser = useAuthUser((s) => s.user);
+  const authLoading = useAuthUser((s) => s.loading);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!authUser || !authUser.scopes?.includes("user.read")) {
+      setLoading(false);
+      setMembers([]);
+      return;
+    }
+
     let cancelled = false;
     let retryCount = 0;
     const maxRetries = 3;
@@ -40,9 +51,10 @@ export function useOrgMembers() {
         setMembers(uniqueUsers.map((u: ManagedUser) => ({
           id: u.id,
           name: u.fullName,
+          fullName: u.fullName,
           role: u.role,
           zones: u.zones || [],
-          isTcm: u.isTcm,
+          isTcm: u.role === "tcm",
           adminId: u.adminId,
           managerId: u.managerId
         })));
@@ -67,7 +79,7 @@ export function useOrgMembers() {
 
     fetchMembers();
     return () => { cancelled = true; };
-  }, []);
+  }, [authLoading, authUser]);
 
   return { members, loading, error };
 }
@@ -158,8 +170,17 @@ export function useActiveTcMs() {
   const [tcms, setTcMs] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const authUser = useAuthUser((s) => s.user);
+  const authLoading = useAuthUser((s) => s.loading);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!authUser || !authUser.scopes?.includes("user.read")) {
+      setLoading(false);
+      setTcMs([]);
+      return;
+    }
+
     let cancelled = false;
     let retryCount = 0;
     const maxRetries = 3;
@@ -190,7 +211,7 @@ export function useActiveTcMs() {
 
     fetchTcMs();
     return () => { cancelled = true; };
-  }, []);
+  }, [authLoading, authUser]);
 
   return { tcms, loading, error };
 }

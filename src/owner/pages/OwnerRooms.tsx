@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Lock, Camera, Check, AlertCircle, Building2, Plus, Sparkles, Eye, Calendar,
-  Zap, IndianRupee,
+  Zap, IndianRupee, ShieldCheck,
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { toast } from 'sonner';
@@ -41,6 +41,7 @@ export function OwnerRooms() {
     rentConfirmed: '',
     floorPrice: '',
     notes: '',
+    actualRent: '',
   });
 
   const [addPropOpen, setAddPropOpen] = useState(false);
@@ -52,6 +53,7 @@ export function OwnerRooms() {
     bedsTotal: '2',
     price: '',
     floorPrice: '',
+    actualRent: '',
   });
 
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -63,9 +65,10 @@ export function OwnerRooms() {
     setEditForm({
       kind: s.kind,
       vacatingDate: s.vacatingDate ?? '',
-      rentConfirmed: s.rentConfirmed?.toString() ?? '',
-      floorPrice: s.floorPrice?.toString() ?? '',
+      rentConfirmed: (s.expectedRent ?? s.rentConfirmed)?.toString() ?? '',
+      floorPrice: (s.lowestAcceptableRent ?? s.floorPrice)?.toString() ?? '',
       notes: s.notes ?? '',
+      actualRent: s.actualRent?.toString() ?? '',
     });
     setEditing(s);
   };
@@ -82,6 +85,9 @@ export function OwnerRooms() {
       vacatingDate: needsVac ? editForm.vacatingDate : undefined,
       rentConfirmed: editForm.rentConfirmed ? Number(editForm.rentConfirmed) : undefined,
       floorPrice: editForm.floorPrice ? Number(editForm.floorPrice) : undefined,
+      actualRent: editForm.actualRent ? Number(editForm.actualRent) : undefined,
+      expectedRent: editForm.rentConfirmed ? Number(editForm.rentConfirmed) : undefined,
+      lowestAcceptableRent: editForm.floorPrice ? Number(editForm.floorPrice) : undefined,
       notes: editForm.notes || undefined,
     });
     toast.success(`Room confirmed`, { description: 'Synced with the team in real time.' });
@@ -110,9 +116,12 @@ export function OwnerRooms() {
       bedsTotal: Number(roomForm.bedsTotal) || 1,
       price: Number(roomForm.price),
       floorPrice: roomForm.floorPrice ? Number(roomForm.floorPrice) : undefined,
+      actualRent: roomForm.actualRent ? Number(roomForm.actualRent) : undefined,
+      expectedRent: Number(roomForm.price),
+      lowestAcceptableRent: roomForm.floorPrice ? Number(roomForm.floorPrice) : undefined,
     });
     toast.success(`Room added`, { description: 'Now visible to your sales team.' });
-    setRoomForm({ type: 'double', bedsTotal: '2', price: '', floorPrice: '' });
+    setRoomForm({ type: 'double', bedsTotal: '2', price: '', floorPrice: '', actualRent: '' });
     setAddRoomFor(null);
   };
 
@@ -156,6 +165,7 @@ export function OwnerRooms() {
         const propStatuses = roomStatuses.filter((s) => s.propertyId === property.id);
         const propRooms = rooms.filter((r) => r.propertyId === property.id);
         const sellable = propStatuses.filter((s) => s.verifiedToday && !s.lockedUnsellable && (s.kind === 'vacant' || s.kind === 'vacating')).length;
+        const propDedicated = propStatuses.filter((s) => s.isDedicated).length;
         return (
           <section key={property.id} className="space-y-3">
             <div className="flex items-end justify-between flex-wrap gap-2">
@@ -166,7 +176,7 @@ export function OwnerRooms() {
                 <div>
                   <h2 className="font-display text-base font-semibold">{property.name}</h2>
                   <div className="text-[11px] text-muted-foreground font-mono">
-                    {property.area} · {propRooms.length} rooms · {sellable} sellable
+                    {property.area} · {propRooms.length} rooms · {sellable} sellable · {propDedicated} allocated to Gharpayy
                   </div>
                 </div>
               </div>
@@ -201,7 +211,7 @@ export function OwnerRooms() {
                         <span className={cn(
                           'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-mono uppercase font-bold bg-white/90 text-foreground',
                         )}>
-                          {s.kind}
+                          {s.kind === 'vacant' ? 'Vacant (Confirmed)' : s.kind === 'blocked' ? 'Blocked (Owner Hold)' : s.kind === 'vacating' ? 'Vacating' : 'Occupied'}
                         </span>
                       </div>
                       <div className="text-white">
@@ -212,21 +222,29 @@ export function OwnerRooms() {
 
                     {/* Body */}
                     <div className="p-3 space-y-2 flex-1 flex flex-col">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-base font-display font-semibold tabular-nums">
-                          ₹{(s.rentConfirmed ?? r?.currentPrice ?? 0).toLocaleString()}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">/mo</span>
-                        {s.floorPrice && (
-                          <span className="ml-auto text-[10px] text-muted-foreground inline-flex items-center gap-0.5" title="Your floor price (private)">
-                            <IndianRupee className="h-2.5 w-2.5" />floor {s.floorPrice.toLocaleString()}
-                          </span>
+                      <div className="flex flex-col gap-1 text-[11px] bg-muted/40 rounded-lg p-2 border border-border/40">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Actual Rent (last):</span>
+                          <span className="font-semibold font-mono tabular-nums">₹{(s.actualRent ?? s.rentConfirmed ?? r?.currentPrice ?? 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-semibold">Expected Rent (ask):</span>
+                          <span className="font-bold text-accent font-mono tabular-nums">₹{(s.expectedRent ?? s.rentConfirmed ?? r?.currentPrice ?? 0).toLocaleString()}</span>
+                        </div>
+                        {(s.lowestAcceptableRent ?? s.floorPrice) && (
+                          <div className="flex items-center justify-between border-t border-dashed border-border pt-1 mt-0.5 text-muted-foreground text-[10px]">
+                            <span className="inline-flex items-center gap-0.5"><Lock className="h-2.5 w-2.5" /> Lowest acceptable (private):</span>
+                            <span className="font-semibold font-mono tabular-nums">₹{(s.lowestAcceptableRent ?? s.floorPrice ?? 0).toLocaleString()}</span>
+                          </div>
                         )}
                       </div>
 
                       <div className="flex flex-wrap gap-1.5 text-[10px]">
                         <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 font-mono">
-                          {r?.bedsTotal ?? 0} bed{r && r.bedsTotal > 1 ? 's' : ''}
+                          Beds: {r?.bedsTotal ?? 0}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 font-mono">
+                          Room ID: {s.roomId}
                         </span>
                         {(s.views ?? 0) > 0 && (
                           <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 font-mono">
@@ -265,19 +283,29 @@ export function OwnerRooms() {
                       </div>
 
                       <div className="mt-auto pt-1 flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 flex-1">
-                          <Switch
-                            checked={!!s.isDedicated}
-                            onCheckedChange={() => {
-                              toggleDedicated(s.roomId);
-                              toast(s.isDedicated ? 'Removed from dedicated' : 'Added to dedicated supply');
-                            }}
-                            disabled={s.kind === 'occupied'}
-                          />
-                          <span className="text-[10px] text-muted-foreground">Dedicated</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={cn(
+                            "h-8 text-xs w-36 justify-center flex items-center gap-1 shrink-0",
+                            s.isDedicated
+                              ? "border-orange-500/30 text-orange-600 bg-orange-500/5 hover:bg-orange-500/10 dark:text-orange-400"
+                              : "border-border text-muted-foreground hover:text-foreground"
+                          )}
+                          onClick={() => {
+                            toggleDedicated(s.roomId);
+                            toast.success(s.isDedicated ? 'Removed from dedicated supply' : 'Room is now dedicated to Gharpayy for selling!');
+                          }}
+                          disabled={s.kind === 'occupied'}
+                        >
+                          <ShieldCheck className="h-4 w-4 shrink-0" />
+                          <span>{s.isDedicated ? 'Release hold' : 'Hold for Gharpayy'}</span>
+                        </Button>
+
+                        <div className="flex items-center gap-2 ml-auto">
+                          <Button size="sm" variant="outline" onClick={() => markRoomVerified(s.roomId)}>No change</Button>
+                          <Button size="sm" onClick={() => openEdit(s)}>Edit</Button>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => markRoomVerified(s.roomId)}>No change</Button>
-                        <Button size="sm" onClick={() => openEdit(s)}>Edit</Button>
                       </div>
 
                       {block && (
@@ -323,20 +351,24 @@ export function OwnerRooms() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="occupied">Occupied</SelectItem>
-                  <SelectItem value="vacating">Vacating (date + rent)</SelectItem>
-                  <SelectItem value="vacant">Vacant</SelectItem>
-                  <SelectItem value="blocked">Blocked</SelectItem>
+                  <SelectItem value="vacating">Vacating (with date)</SelectItem>
+                  <SelectItem value="vacant">Vacant (Confirmed)</SelectItem>
+                  <SelectItem value="blocked">Blocked (Owner Hold)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Confirmed rent ₹</Label>
-                <Input type="number" value={editForm.rentConfirmed} onChange={(e) => setEditForm((f) => ({ ...f, rentConfirmed: e.target.value }))} />
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Actual Rent ₹</Label>
+                <Input type="number" value={editForm.actualRent} onChange={(e) => setEditForm((f) => ({ ...f, actualRent: e.target.value }))} placeholder="Last tenant" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Floor (private) ₹</Label>
-                <Input type="number" value={editForm.floorPrice} onChange={(e) => setEditForm((f) => ({ ...f, floorPrice: e.target.value }))} />
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Expected Rent ₹</Label>
+                <Input type="number" value={editForm.rentConfirmed} onChange={(e) => setEditForm((f) => ({ ...f, rentConfirmed: e.target.value }))} placeholder="Owner ask" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Lowest Acceptable ₹</Label>
+                <Input type="number" value={editForm.floorPrice} onChange={(e) => setEditForm((f) => ({ ...f, floorPrice: e.target.value }))} placeholder="Private" />
               </div>
             </div>
             {editForm.kind === 'vacating' && (
@@ -407,14 +439,18 @@ export function OwnerRooms() {
                 <Input type="number" value={roomForm.bedsTotal} onChange={(e) => setRoomForm((f) => ({ ...f, bedsTotal: e.target.value }))} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div className="space-y-1.5">
-                <Label>Expected rent ₹</Label>
-                <Input type="number" value={roomForm.price} onChange={(e) => setRoomForm((f) => ({ ...f, price: e.target.value }))} />
+                <Label>Actual Rent ₹</Label>
+                <Input type="number" value={roomForm.actualRent} onChange={(e) => setRoomForm((f) => ({ ...f, actualRent: e.target.value }))} placeholder="Last tenant" />
               </div>
               <div className="space-y-1.5">
-                <Label>Floor price ₹ (private)</Label>
-                <Input type="number" value={roomForm.floorPrice} onChange={(e) => setRoomForm((f) => ({ ...f, floorPrice: e.target.value }))} />
+                <Label>Expected Rent ₹</Label>
+                <Input type="number" value={roomForm.price} onChange={(e) => setRoomForm((f) => ({ ...f, price: e.target.value }))} placeholder="Owner ask" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Lowest Acceptable ₹</Label>
+                <Input type="number" value={roomForm.floorPrice} onChange={(e) => setRoomForm((f) => ({ ...f, floorPrice: e.target.value }))} placeholder="Private" />
               </div>
             </div>
           </div>

@@ -203,6 +203,7 @@ export interface Property {
   photoCount: number;
   pageViews: number;       // last 7 days
   shares: number;          // last 7 days
+  genderCategory?: string;
 }
 
 export interface Room {

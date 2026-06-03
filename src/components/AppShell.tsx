@@ -135,6 +135,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navByRole: Record<typeof role, NavItem[]> = {
     hr: withTailNav([
       { to: "/today", label: "Today", icon: Sun, badge: queue.length },
+      { to: "/coach", label: "Coach", icon: Sparkles, accent: true },
       { to: "/leads", label: "Leads", icon: Target },
       { to: "/myt/tours", label: "Tours", icon: CalendarPlus },
       { to: "/impact", label: "Impact Queue", icon: HeartPulse },
@@ -151,6 +152,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ]),
     "flow-ops": withTailNav([
       { to: "/today", label: "Today", icon: Sun, badge: queue.length },
+      { to: "/coach", label: "Coach", icon: Sparkles, accent: true },
       { to: "/inbox", label: "Inbox", icon: Inbox },
       { to: "/leads", label: "Leads", icon: Target },
       { to: "/myt/schedule", label: "Tours", icon: CalendarPlus },
@@ -165,6 +167,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ]),
     tcm: withTailNav([
       { to: "/today", label: "Today", icon: Sun, badge: queue.length },
+      { to: "/coach", label: "Coach", icon: Sparkles, accent: true },
       { to: "/inbox", label: "Inbox", icon: Inbox },
       { to: "/leads", label: "Leads", icon: Target },
       { to: "/myt/schedule", label: "Tours", icon: CalendarPlus },
@@ -179,6 +182,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ]),
     owner: [
       { to: "/owner", label: "Owner Home", icon: ShieldCheck },
+      { to: "/coach", label: "Coach", icon: Sparkles, accent: true },
       { to: "/owner/inventory", label: "My Inventory", icon: Layers },
       { to: "/owner/upload", label: "Add Property", icon: Target },
       { to: "/owner/rooms", label: "Update Rooms", icon: Building2 },
@@ -188,6 +192,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ],
     "super-admin": [
       { to: "/admin", label: "Cockpit", icon: Gauge },
+      { to: "/coach", label: "Coach", icon: Sparkles, accent: true },
       { to: "/admin/supreme", label: "Supreme \u00B7 God Mode", icon: Zap },
       { to: "/admin/command", label: "Command Bridge", icon: Swords },
       { to: "/admin/war-room", label: "War-Room TV", icon: Radio },
@@ -208,7 +213,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const items = [...navByRole[role]];
   
 
-  const isActive = (to: string) => (to === "/" ? path === "/" : path === to || path.startsWith(to + "/"));
+  const isActive = (to: string) =>
+    to === "/" || to === "/owner" || to === "/admin"
+      ? path === to
+      : path === to || path.startsWith(to + "/");
   const shouldMountMytBridges = path.startsWith("/myt");
 
   return (

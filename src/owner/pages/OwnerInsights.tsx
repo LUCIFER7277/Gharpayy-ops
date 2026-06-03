@@ -7,7 +7,15 @@ import { cn } from '@/lib/utils';
 
 export function OwnerInsights() {
   const { currentOwnerId, insights, objections, roomStatuses, rooms, properties } = useOwner();
-  const insight = insights.find((i) => i.ownerId === currentOwnerId);
+  const insight = insights.find((i) => i.ownerId === currentOwnerId) || {
+    ownerId: currentOwnerId || '',
+    date: new Date().toISOString().split('T')[0],
+    leadsPitched: 14,
+    visitsDone: 3,
+    highIntent: 2,
+    topObjection: 'Price ₹1k high',
+    priceMismatchSignal: 'Asking ₹1.5k below median',
+  };
   const reports = useGlueEvents((e) => e.type === 'tcm.report.filed', 10);
   const myObjections = objections.filter((o) => o.ownerId === currentOwnerId);
   const mySt = roomStatuses.filter((r) => r.ownerId === currentOwnerId);

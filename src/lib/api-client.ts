@@ -56,9 +56,12 @@ async function fetchClient<T>(endpoint: string, options: RequestOptions = {}): P
 
   const token = getAuthToken();
   const defaultHeaders: HeadersInit = {
-    "Content-Type": "application/json",
     Accept: "application/json",
   };
+
+  if (!(customConfig.body instanceof FormData)) {
+    defaultHeaders["Content-Type"] = "application/json";
+  }
 
   if (token) {
     defaultHeaders["Authorization"] = `Bearer ${token}`;
@@ -114,19 +117,19 @@ export const apiClient = {
     fetchClient<T>(endpoint, {
       ...options,
       method: "POST",
-      body: body ? JSON.stringify(body) : undefined,
+      body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
     }),
   put: <T>(endpoint: string, body?: any, options?: RequestOptions) =>
     fetchClient<T>(endpoint, {
       ...options,
       method: "PUT",
-      body: body ? JSON.stringify(body) : undefined,
+      body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
     }),
   patch: <T>(endpoint: string, body?: any, options?: RequestOptions) =>
     fetchClient<T>(endpoint, {
       ...options,
       method: "PATCH",
-      body: body ? JSON.stringify(body) : undefined,
+      body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
     }),
   delete: <T>(endpoint: string, options?: RequestOptions) =>
     fetchClient<T>(endpoint, { ...options, method: "DELETE" }),

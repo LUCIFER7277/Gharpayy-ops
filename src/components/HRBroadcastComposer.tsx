@@ -11,6 +11,7 @@ import { useApp } from "@/lib/store";
 import type { Role } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useAuthUser } from "@/lib/auth-store";
 
 type AudienceMode = "role" | "people";
 const ALL_ROLES: Role[] = ["tcm", "flow-ops", "hr", "owner", "super-admin"];
@@ -18,9 +19,12 @@ const ALL_ROLES: Role[] = ["tcm", "flow-ops", "hr", "owner", "super-admin"];
 export function HRBroadcastComposer({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const role = useApp((s) => s.role);
   const currentTcmId = useApp((s) => s.currentTcmId);
-  if (role !== "hr") return null;
+  const authUser = useAuthUser((s) => s.user);
 
-  const senderPersona = activePersona("hr", undefined);
+  if (role !== "hr" && role !== "super-admin") return null;
+
+  const senderPersona = activePersona(role === "super-admin" ? "hr" : role, undefined);
+  const displayName = authUser?.fullName || authUser?.username || senderPersona.name || "Admin";
   const pushBroadcast = useNotifications((s) => s.pushBroadcast);
 
   const [open, setOpen] = useState(defaultOpen);
@@ -74,7 +78,7 @@ export function HRBroadcastComposer({ defaultOpen = false }: { defaultOpen?: boo
       : undefined;
     const ids = pushBroadcast({
       senderId: senderPersona.id,
-      senderName: senderPersona.name,
+      senderName: displayName,
       recipients,
       channels: Array.from(channels),
       severity,
@@ -113,7 +117,7 @@ export function HRBroadcastComposer({ defaultOpen = false }: { defaultOpen?: boo
         <Megaphone className="h-4 w-4 text-accent" />
         <h3 className="font-semibold text-sm">HR Broadcast</h3>
         <Badge variant="outline" className="ml-auto text-[10px] font-mono">
-          from {senderPersona.name.split(" ")[0]}
+          from {displayName.split(" ")[0]}
         </Badge>
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setOpen(false)}>
           <X className="h-3.5 w-3.5" />

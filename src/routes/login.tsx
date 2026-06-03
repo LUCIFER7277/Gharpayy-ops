@@ -82,6 +82,41 @@ function LoginPage() {
         <Button className="w-full" disabled={busy || !identifier || !password} onClick={submit}>
           {busy ? "Signing in…" : "Sign in"}
         </Button>
+        <div className="pt-3 border-t border-border space-y-2">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Demo Profiles</div>
+          <div className="grid grid-cols-1 gap-1.5 text-xs">
+            <button
+              onClick={() => {
+                setIdentifier("superadmin@gharpayy.com");
+                setPassword("superadmin#gharpayy");
+              }}
+              className="flex items-center justify-between px-2.5 py-1.5 rounded-md border bg-card hover:bg-muted text-left transition-colors font-medium cursor-pointer"
+            >
+              <span>Super Admin</span>
+              <span className="text-[10px] text-muted-foreground font-mono">superadmin@gharpayy.com</span>
+            </button>
+            <button
+              onClick={() => {
+                setIdentifier("sivani_7899700929@gharpayy.com");
+                setPassword("Password123");
+              }}
+              className="flex items-center justify-between px-2.5 py-1.5 rounded-md border bg-card hover:bg-muted text-left transition-colors font-medium cursor-pointer"
+            >
+              <span>Owner (Sivani)</span>
+              <span className="text-[10px] text-muted-foreground font-mono">sivani_7899700929@gharpayy.com</span>
+            </button>
+            <button
+              onClick={() => {
+                setIdentifier("rakesh@propertyplay.com");
+                setPassword("Password123");
+              }}
+              className="flex items-center justify-between px-2.5 py-1.5 rounded-md border bg-card hover:bg-muted text-left transition-colors font-medium cursor-pointer"
+            >
+              <span>Owner (Rakesh)</span>
+              <span className="text-[10px] text-muted-foreground font-mono font-bold">rakesh@propertyplay.com</span>
+            </button>
+          </div>
+        </div>
         <p className="text-[11px] text-muted-foreground">
           API: <code className="text-foreground">{api.apiUrl}</code>
         </p>

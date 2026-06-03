@@ -199,6 +199,8 @@ const XP: Record<CoachKind, number> = {
 export interface CoachInput {
   role: Role;
   currentTcmId: string;
+  currentOwnerId?: string;
+  currentOwnerName?: string;
   tcms: TCM[];
   leads: Lead[];
   tours: Tour[];
@@ -217,7 +219,7 @@ export interface CoachInput {
 
 export function buildCoachReport(input: CoachInput): CoachReport {
   const {
-    role, currentTcmId, tcms, leads, tours, followUps,
+    role, currentTcmId, currentOwnerId, currentOwnerName, tcms, leads, tours, followUps,
     activities, bookings, handoffs, ownerSignals, now,
   } = input;
 
@@ -384,7 +386,11 @@ export function buildCoachReport(input: CoachInput): CoachReport {
   });
 
   /* MISSION (persona-aware target) */
-  const persona = activePersona(role, role === "tcm" ? currentTcmId : undefined);
+  const persona = activePersona(
+    role,
+    role === "tcm" ? currentTcmId : role === "owner" ? currentOwnerId : undefined,
+    role === "owner" ? currentOwnerName : undefined
+  );
   const target = persona.missionCap || missionTargetFor(role);
   const doneCount = done.length;
   const xpToday = done.reduce((s, d) => s + d.xp, 0);

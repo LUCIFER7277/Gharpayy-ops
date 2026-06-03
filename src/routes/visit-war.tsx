@@ -104,7 +104,7 @@ function isHotTour(t: import("@/lib/types").Tour, now: number): boolean {
 }
 
 function VisitWarRoom() {
-  const { leads, properties, tours, tcms, role, currentTcmId, setProperties } = useApp();
+  const { leads, properties, tours, tcms, role, currentTcmId } = useApp();
   const { records, alerts, upsert, patch, pushAlert, markAlertsSeen, addObjection, alertsSeenAt } = useVisitWar();
   const [now, mounted] = useMountedNow(1000);
   const [lens, setLens] = useState<Lens>(() => defaultLensFor(role));
@@ -154,7 +154,7 @@ function VisitWarRoom() {
       daysSinceLastBooking: 0,
       pricePerBed: pg.prices?.triple || pg.prices?.double || pg.prices?.min || 0,
     }));
-    setProperties(fromPgs);
+    useApp.setState({ properties: fromPgs });
     console.debug("[VisitWar] properties seeded from PGS catalog:", fromPgs.length);
 
     // Step 2: try to enrich from API (MongoDB properties collection)
@@ -202,10 +202,10 @@ function VisitWarRoom() {
           }
         });
         console.debug("[VisitWar] properties merged API+PGS:", merged.length);
-        setProperties(merged);
+        useApp.setState({ properties: merged });
       })
       .catch((e) => console.debug("[VisitWar] API properties unavailable, using PGS only:", (e as Error)?.message));
-  }, [mounted, setProperties]);
+  }, [mounted]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -542,7 +542,7 @@ function VisitWarRoom() {
               <WarMapPanel now={now} />
             </TabsContent>
             <TabsContent value="stats" className="m-0">
-              <WarRoomStats list={list} tours={tours} leads={leads} properties={properties} records={records} />
+              <WarRoomStats list={list} />
             </TabsContent>
             <TabsContent value="alerts" className="m-0">
               <AlertFeed />

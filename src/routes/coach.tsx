@@ -22,7 +22,7 @@ function CoachRoute() {
           What you've done, what slipped, what's next, and exactly how to do it.
           Clear items to earn XP, keep your streak alive, and unlock badges.
         </p>
-        {role === "hr" && <HRBroadcastComposer />}
+        {(role === "hr" || role === "super-admin") && <HRBroadcastComposer />}
         <div className="rounded-xl border border-border bg-card p-5 md:p-6">
           <CoachPanel />
         </div>

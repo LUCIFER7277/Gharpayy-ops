@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
+import multipart from "@fastify/multipart";
 import { env, corsOrigins } from "./config/env.js";
 import { connectMongo, disconnectMongo } from "./db/mongo.js";
 import { redis, redisPub, redisSub } from "./db/redis.js";
@@ -20,6 +21,7 @@ import { registerPropertyRoutes } from "./modules/properties/routes.js";
 import { registerActivityFeedRoutes } from "./modules/activity/feed-routes.js";
 import { registerStatsRoutes } from "./modules/stats/routes.js";
 import { registerQuotationsRoutes } from "./modules/quotations/routes.js";
+import { registerOwnerRoutes } from "./modules/owner/routes.js";
 import { ensureDefaultSuperAdmin } from "./auth/auth.js";
 
 async function main() {
@@ -49,6 +51,7 @@ async function main() {
     allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key", "X-Requested-With", "Accept", "Origin"],
   });
   await app.register(cookie);
+  await app.register(multipart);
   await app.register(rateLimit, {
     max: env.NODE_ENV === "development" ? 10000 : 300,
     timeWindow: "1 minute",
@@ -95,6 +98,7 @@ h1{margin:0 0 .5rem;font-size:1.5rem;color:#34d399}p{margin:.25rem 0;color:#94a3
   registerActivityFeedRoutes(app);
   registerStatsRoutes(app);
   registerQuotationsRoutes(app);
+  registerOwnerRoutes(app);
 
   // Idempotent — bootstraps the canonical Super Admin if missing.
   await ensureDefaultSuperAdmin().catch((err) => app.log.warn({ err }, "ensureDefaultSuperAdmin failed"));

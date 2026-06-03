@@ -9,6 +9,7 @@ import { api } from "@/lib/api/client";
 import { onEvent, getSocket } from "@/lib/api/socket";
 import type { Lead as LegacyLead, LeadStage, Intent } from "@/lib/types";
 import type { Lead as WireLead, DomainEvent } from "@/contracts";
+import { useAuthUser } from "@/lib/auth-store";
 
 function toLegacy(w: WireLead, fallbackTcmId = ""): LegacyLead {
   return {
@@ -47,6 +48,9 @@ function toLegacy(w: WireLead, fallbackTcmId = ""): LegacyLead {
 export function LiveLeadsBridge() {
   const setLeads = useApp((s) => s.setLeads);
   const tcms = useApp((s) => s.tcms);
+  const authUser = useAuthUser((s) => s.user);
+  const authLoading = useAuthUser((s) => s.loading);
+
   // Keep a ref so the effect closure always reads the latest tcms
   // without needing tcms in the dependency array (which would re-trigger
   // the full fetch every time tcms loads and discard in-flight results).
@@ -54,6 +58,13 @@ export function LiveLeadsBridge() {
   useEffect(() => { tcmsRef.current = tcms; }, [tcms]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!authUser || !authUser.scopes?.includes("lead.read")) {
+      setLeads([]);
+      useLeadsSync.getState().setReady();
+      return;
+    }
+
     let cancelled = false;
 
     useLeadsSync.getState().setLoading();
@@ -100,7 +111,7 @@ export function LiveLeadsBridge() {
     });
 
     return () => { cancelled = true; off(); };
-  }, [setLeads]); // ← only setLeads (stable zustand ref), not tcms
+  }, [setLeads, authLoading, authUser]); // ← only setLeads (stable zustand ref), not tcms
 
   return null;
 }

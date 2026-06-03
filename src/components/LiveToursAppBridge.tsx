@@ -6,6 +6,7 @@ import { api } from "@/lib/api/client";
 import { onEvent, getSocket } from "@/lib/api/socket";
 import type { Tour as LegacyTour, TourStatus } from "@/lib/types";
 import type { Tour as WireTour, DomainEvent } from "@/contracts";
+import { glueBus } from "@/owner/event-bus";
 
 function toLegacyTour(w: WireTour): LegacyTour {
   return {
@@ -64,6 +65,12 @@ export function LiveToursAppBridge() {
         const tour = toLegacyTour(e.payload.tour);
         if (!cur.some((t) => t.id === tour.id)) setTours([tour, ...cur]);
         else setTours(cur.map((t) => (t.id === tour.id ? { ...t, ...tour } : t)));
+        glueBus.publish({
+          type: "team.visit.scheduled",
+          tourId: tour.id,
+          leadId: tour.leadId,
+          roomId: tour.propertyId ? `r-${tour.propertyId}-double` : undefined,
+        });
         return;
       }
 
@@ -86,6 +93,14 @@ export function LiveToursAppBridge() {
               : t,
           ),
         );
+        const tourObj = cur.find((t) => t.id === e.payload.tourId);
+        if (tourObj) {
+          glueBus.publish({
+            type: "team.visit.ended",
+            tourId: tourObj.id,
+            leadId: tourObj.leadId,
+          });
+        }
         return;
       }
 
@@ -109,6 +124,16 @@ export function LiveToursAppBridge() {
               : t,
           ),
         );
+        if ((patch.status as any) === "on-tour") {
+          const tourObj = cur.find((t) => t.id === e.payload.tourId);
+          if (tourObj) {
+            glueBus.publish({
+              type: "team.visit.started",
+              tourId: tourObj.id,
+              leadId: tourObj.leadId,
+            });
+          }
+        }
       }
     });
 
