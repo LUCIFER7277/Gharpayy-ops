@@ -64,8 +64,6 @@ export function registerPropertyRoutes(app: FastifyInstance) {
     try {
       const body = CreateBody.parse(req.body);
       const name = body.name.trim();
-      const exists = await properties().findOne({ tenantId: req.user!.tenantId, name });
-      if (exists) return reply.code(409).send({ code: "CONFLICT", message: "Property name already exists" });
       
       const now = new Date().toISOString();
       const doc: PropertyDoc = {
@@ -95,9 +93,6 @@ export function registerPropertyRoutes(app: FastifyInstance) {
       const body = req.body as any;
       const name = body.name?.trim();
       if (!name) return reply.code(400).send({ code: "BAD_REQUEST", message: "Property name is required" });
-      
-      const exists = await properties().findOne({ tenantId: req.user!.tenantId, name });
-      if (exists) return reply.code(409).send({ code: "CONFLICT", message: "Property name already exists" });
       
       const now = new Date().toISOString();
       const customId = `p-custom-${crypto.randomUUID()}`;
@@ -155,9 +150,6 @@ export function registerPropertyRoutes(app: FastifyInstance) {
       const { id } = req.params as { id: string };
       const body = UpdateBody.parse(req.body);
       const name = body.name.trim();
-      
-      const dupe = await properties().findOne({ tenantId: req.user!.tenantId, name, _id: { $ne: id } });
-      if (dupe) return reply.code(409).send({ code: "CONFLICT", message: "Property name already exists" });
       
       const r = await properties().findOneAndUpdate(
         { _id: id, tenantId: req.user!.tenantId },

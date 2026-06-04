@@ -135,9 +135,10 @@ export function OwnerUpload() {
   // One-Click Demo Prefill
   const handleDemoPrefill = () => {
     toast.success("Demo details prefilled successfully!");
+    const randomSuffix = Math.floor(100 + Math.random() * 900);
     
     if (propertyType === "pg") {
-      setName("Tranquil Nest Koramangala");
+      setName(`Tranquil Nest Koramangala ${randomSuffix}`);
       setArea("Koramangala");
       setAddress("12th Main, Koramangala 4th Block, Bengaluru, Karnataka 560034");
       setDescription("Premium co-living facility designed for young professionals. High comfort, regular cleaning, healthy home-style meals, and a vibrant community.");
@@ -156,7 +157,7 @@ export function OwnerUpload() {
         "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=800&q=80"
       ]);
     } else {
-      setName("Orchid Vista Residences");
+      setName(`Orchid Vista Residences ${randomSuffix}`);
       setArea("HSR Layout Sector 3");
       setAddress("Tower B-402, Orchid Vista, 24th Main Road, HSR Layout, Bengaluru 560102");
       setDescription("Stunning high-rise apartment offering cross-ventilation, outstanding society security protocols, covered parking spots, and close proximity to top tech parks.");
