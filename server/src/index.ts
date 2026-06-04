@@ -44,7 +44,7 @@ async function main() {
       if (env.NODE_ENV === "development" && /^(https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/.test(origin)) {
         return cb(null, true);
       }
-      return cb(new Error("Not allowed by CORS"), false);
+      return cb(null, false);
     },
     credentials: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
