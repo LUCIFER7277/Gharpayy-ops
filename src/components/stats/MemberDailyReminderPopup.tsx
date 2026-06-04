@@ -53,7 +53,7 @@ export function MemberDailyReminderPopup() {
 
   const previousReminderKeyRef = useRef<string | null>(null);
 
-  const { data, isLoading } = useLeadsDailyProgress(today);
+  const { data, isLoading } = useLeadsDailyProgress(today, { enabled: !!isMemberLikeRole });
 
   const goals = data?.goals || { leadsAdded: 40, toursScheduled: 10, quotesSent: 10 };
   const memberRow = useMemo(() => {

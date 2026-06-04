@@ -10,5 +10,10 @@
     "outDir": "dist",
     "rootDir": ".."
   },
-  "include": ["src/**/*", "../src/contracts/**/*", "../src/supply-hub/data/pgs.ts", "../src/supply-hub/data/types.ts"]
+  "include": [
+    "src/**/*",
+    "../src/contracts/**/*",
+    "../src/supply-hub/data/pgs.ts",
+    "../src/supply-hub/data/types.ts"
+  ]
 }

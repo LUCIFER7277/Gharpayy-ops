@@ -72,6 +72,10 @@ function PodiumCard({ item, index }: { item: CreatorLeaderboardEntry; index: num
 
 export function CreatorLeaderboardPanel({ compact = false }: { compact?: boolean }) {
   const authUser = useAuthUser((s) => s.user);
+  const role = authUser?.role ?? "";
+  const allowedRoles = ["super_admin", "manager", "admin", "member", "tcm"];
+  const hasAccess = allowedRoles.includes(role);
+
   const [period, setPeriod] = useState<LeaderboardPeriod>("this_month");
   const [selectedZone, setSelectedZone] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -81,6 +85,7 @@ export function CreatorLeaderboardPanel({ compact = false }: { compact?: boolean
     queryKey: ["office-zones"],
     queryFn: () => api.zones.list(),
     staleTime: 60_000,
+    enabled: hasAccess,
   });
 
   const handlePeriodSelect = (nextPeriod: LeaderboardPeriod) => {
@@ -100,7 +105,7 @@ export function CreatorLeaderboardPanel({ compact = false }: { compact?: boolean
   );
 
   const effectivePeriod: LeaderboardPeriod | "custom" = hasValidCustomRange ? "custom" : period;
-  const { data, isLoading, isError } = useCreatorLeaderboard(effectivePeriod, selectedZone, customRange);
+  const { data, isLoading, isError } = useCreatorLeaderboard(effectivePeriod, selectedZone, customRange, { enabled: hasAccess });
 
   const zoneNames = useMemo(() => {
     const names = (officeZones ?? []).map((z) => String(z.name || "").trim()).filter(Boolean);
@@ -122,6 +127,14 @@ export function CreatorLeaderboardPanel({ compact = false }: { compact?: boolean
     () => rankings.find((r) => r.userId === authUser?.id) ?? null,
     [rankings, authUser?.id],
   );
+
+  if (!hasAccess) {
+    return (
+      <div className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+        Leaderboard is not available for your role.
+      </div>
+    );
+  }
 
   return (
     <div className={compact ? "space-y-4" : "space-y-5"}>
