@@ -50,9 +50,9 @@
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/query-core": "^5.99.2",
     "@tanstack/react-query": "^5.83.0",
-    "@tanstack/react-router": "^1.168.0",
-    "@tanstack/react-start": "^1.168.0",
-    "@tanstack/router-plugin": "^1.168.0",
+    "@tanstack/react-router": "1.168.10",
+    "@tanstack/react-start": "1.167.16",
+    "@tanstack/router-plugin": "1.167.12",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -101,14 +101,5 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^7.3.1",
     "vitest": "^3.2.4"
-  },
-  "overrides": {
-    "@tanstack/router-core": "1.168.10",
-    "@tanstack/start-server-core": {
-      "@tanstack/router-core": "1.168.10"
-    },
-    "@tanstack/start-client-core": {
-      "@tanstack/router-core": "1.168.10"
-    }
   }
 }
