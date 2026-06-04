@@ -19,6 +19,19 @@ export function scoreOwnerCompliance(
   now = Date.now()
 ): ComplianceSnapshot {
   const ownerRooms = rooms.filter((r) => r.ownerId === owner.id);
+  if (ownerRooms.length === 0) {
+    return {
+      ownerId: owner.id,
+      date: todayKey(new Date(now)),
+      totalRooms: 0,
+      verifiedRooms: 0,
+      mediaFreshRooms: 0,
+      blocksRespondedInTime: 0,
+      blocksTotal: 0,
+      score: 0,
+      tier: 'throttled',
+    };
+  }
   const total = ownerRooms.length || 1;
   const verified = ownerRooms.filter((r) => r.verifiedToday && !r.lockedUnsellable).length;
   const vacantRooms = ownerRooms.filter((r) => r.kind === 'vacant');
