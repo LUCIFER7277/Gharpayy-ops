@@ -15,6 +15,11 @@ import { apiClient } from '@/lib/api-client';
 
 type OwnerRole = 'owner' | null;
 
+function getOwnerToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('gharpayy.access_token') || localStorage.getItem('gharpayy.token');
+}
+
 interface OwnerCtxValue {
   // identity
   currentOwnerId: string | null;
@@ -276,7 +281,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initSession = async () => {
       if (!sessionChecked) {
-        const token = localStorage.getItem("gharpayy.access_token") || localStorage.getItem("gharpayy.token");
+        const token = getOwnerToken();
         if (token) {
           try {
             const res = await apiClient.get("/owner/current-owner", {
@@ -327,7 +332,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
       // Silent mock login fallback
       if (!currentOwnerId) return;
       if (currentOwnerId.startsWith('own-custom-')) {
-        const token = localStorage.getItem("gharpayy.access_token") || localStorage.getItem("gharpayy.token");
+        const token = getOwnerToken();
         if (token) loadData(token);
         return;
       }
@@ -392,7 +397,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
     }));
 
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const res = await apiClient.put(`/owner/rooms/${roomId}/status`, patch, {
@@ -414,7 +419,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
     setRooms((prev) => prev.map((r) => r.id === roomId ? { ...r, bedsTotal, type } : r));
 
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const res = await apiClient.put(`/owner/rooms/${roomId}/sharing`, { bedsTotal, type }, {
@@ -436,7 +441,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
     ));
 
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const res = await apiClient.post(`/owner/rooms/${roomId}/verify`, null, {
@@ -455,7 +460,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
 
   const uploadMedia: OwnerCtxValue['uploadMedia'] = async (roomId, photosList, videoUrlOrFile) => {
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const formData = new FormData();
@@ -541,7 +546,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
     }));
 
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const res = await apiClient.post(`/owner/blocks/${blockId}/decide`, { decision }, {
@@ -582,7 +587,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
     ));
 
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const res = await apiClient.put(`/owner/rooms/${roomId}/toggle-dedicated`, null, {
@@ -607,7 +612,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
     ));
 
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const res = await apiClient.post("/owner/rooms/bulk-verify", { roomIds }, {
@@ -634,7 +639,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
     ));
 
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const res = await apiClient.post("/owner/rooms/bulk-rent-delta", { roomIds, delta }, {
@@ -651,7 +656,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
 
   const addProperty: OwnerCtxValue['addProperty'] = async (input) => {
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const res = await apiClient.post("/owner/properties", input, {
@@ -668,7 +673,7 @@ export function OwnerProvider({ children }: { children: React.ReactNode }) {
 
   const addRoom: OwnerCtxValue['addRoom'] = async (input) => {
     try {
-      const token = localStorage.getItem("gharpayy.token");
+      const token = getOwnerToken();
       if (!token) return;
 
       const res = await apiClient.post("/owner/rooms", input, {
