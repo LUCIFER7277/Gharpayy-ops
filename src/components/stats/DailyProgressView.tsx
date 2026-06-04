@@ -78,7 +78,7 @@ export function DailyProgressView() {
   const hasAccess = allowedRoles.includes(role);
 
   const [selectedDate, setSelectedDate] = useState(getTodayIstDate());
-  const { data, isLoading, isError } = useLeadsDailyProgress(selectedDate);
+  const { data, isLoading, isError } = useLeadsDailyProgress(selectedDate, { enabled: hasAccess });
 
   const goals = data?.goals || { leadsAdded: 40, toursScheduled: 10, quotesSent: 10 };
   const members = data?.members || [];
